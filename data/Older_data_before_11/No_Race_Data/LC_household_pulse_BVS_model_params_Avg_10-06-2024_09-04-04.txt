@@ -1,0 +1,11 @@
+{
+    "beta": 1,
+    "mu": 0,
+    "sigma": 2,
+    "prob_of_success": 0.2,
+    "draws": 10000,
+    "tune": 10000,
+    "cores": 4,
+    "target_accept": 0.85,
+    "max_treedepth": 50
+}
