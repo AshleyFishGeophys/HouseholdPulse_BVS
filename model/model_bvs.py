@@ -349,8 +349,8 @@ def bayesian_variable_selection_with_dfs(
             idata_kwargs = {'log_likelihood': True}
         )
         
+    # return trace, model
     return trace
-
 
 
 
@@ -435,34 +435,25 @@ def run_optuna_hyperparameter_optimization(
             model_params # model parameters for BVS
         )
         
-#         log_likelihood = pm.compute_log_likelihood(trace)
-#         log_likelihood_df = log_likelihood.to_dataframe()
-#         mean_log_likelihood = log_likelihood_df.mean(axis=0)
-
-        # Use ArviZ for analysis
-        # Access log_likelihood directly from the trace
-        # mean_log_likelihood = np.mean(trace['log_likelihood'])
-#         mean_log_likelihood = trace['log_likelihood'].to_dataframe().mean(axis=0)
+        idata = pm.to_inference_data(trace, log_likelihood=True)
         
-#         print(-mean_log_likelihood)
-
-        mean_log_likelihood = np.mean(trace.log_likelihood)
-
-        logging.info(f"Mean log-likelihood: {mean_log_likelihood}")        
+        log_likelihood = idata.log_likelihood.likelihood.values
         
+        mean_log_likelihood = np.mean(log_likelihood)
         print(mean_log_likelihood)
         
-        trial.set_user_attr("mean_log_likelihood_neg", mean_log_likelihood)
-
+        trial.set_user_attr("mean_log_likelihood", mean_log_likelihood)
         
-        return -mean_log_likelihood
-    
+        return mean_log_likelihood
+
     
     # Add stream handler of stdout to show the messages
     optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
     
+    # Save data in sqlite db
     storage_name = "sqlite:///{}.db".format(study_name) # DB to store hyperparameters study results
 
+    # Use sampler with optuna optimization instead of random sampling
     sampler = optuna.samplers.QMCSampler()    
     
     # Create optuna hyperparameters study
@@ -473,7 +464,7 @@ def run_optuna_hyperparameter_optimization(
         load_if_exists=True  # Resume hyperparameter study if exists
     )
     
-    df_optuna_name = f'Optuna_best_params_{experiment_name}.csv'
+    df_optuna_name = f'Optuna_best_params_{study_name}.csv'
     df_optuna = study.trials_dataframe(attrs=("number", "value", "params", "state")) 
     df_optuna.to_csv(df_optuna_name, index=False) 
 
