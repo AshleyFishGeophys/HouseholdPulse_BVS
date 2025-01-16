@@ -18,7 +18,9 @@ def bayesian_variable_selection_multiple(
     df_vars: pd.DataFrame,
     df_values: pd.DataFrame,
     model_params: dict,
-    experiment_name: str = "LC_household_pulse_v11" 
+    experiment_name: str = "LC_household_pulse_v11",
+    save_model: bool = True
+
 ) -> list:
     """Performs Bayesian Variable Selection for multiple target
     variables in two pandas DataFrames, one containing variables and
@@ -77,7 +79,8 @@ def bayesian_variable_selection_multiple(
             df_vars,  # dataframe containing variables
             df_values[target_col],  # series containing Long COVID rates
             target_col,  # corresponding column header to rate values
-            model_params # model parameters for BVS
+            model_params, # model parameters for BVS
+            save_model=True
         )
         
         traces.append(trace)  # append BVS results to list
@@ -85,19 +88,38 @@ def bayesian_variable_selection_multiple(
         save_inference_arviz_to_df(
             inferece_results_az=trace,
             target_name=f"{target_col}",
-            model_params=model_params,
-            experiment_name=experiment_name
+            model_params=model_params
         )
         
     return traces
 
 
 
+# def pickle_model(output_path: str, model, trace):
+#     """Pickles PyMC3 model and trace"""
+#     with open(output_path, "wb") as buff:
+#         pickle.dump({"model": model, "trace": trace}, buff)
+
+
+def save_model(model, model_path):
+    
+    # pm.dump(model, f'{model_name}.h5')
+    pm.save_model(model, f"./model_{experiment_name}.h5")
+    
+
+def save_trace(trace, experiment_name):
+    pm.save_trace(
+        trace,
+        directory=f"./trace_{experiment_name}",
+        overwrite=True
+    )
+
+    
 def save_inference_arviz_to_df(
     inferece_results_az:  az.InferenceData,
     target_name: str,
     model_params: dict,
-    experiment_name: str
+    # experiment_name: str
 ) -> None:
     """Saves BVS results and model parameters to csv.
         
@@ -121,6 +143,9 @@ def save_inference_arviz_to_df(
         selection funcion. No need to call this separately. 
     
     """
+    
+    experiment_name = model_params["experiment_name"]
+
     # Convert inference arviz data type to pandas datafram
     posterior_df  = inferece_results_az.to_dataframe()
     sample_stats_df = inferece_results_az.sample_stats.to_dataframe()
@@ -170,7 +195,8 @@ def bayesian_variable_selection_with_dfs(
     series_values: pd.Series,
     target_col: str, 
     model_params: dict,
-    imputer_strategy='mean'
+    imputer_strategy: str = 'mean',
+    save_model: bool = False
 ) -> pm.backends.base.MultiTrace:
     """Performs Bayesian Variable Selection using PyMC3
     on a pandas DataFrame containing variables and a pandas
@@ -238,16 +264,25 @@ def bayesian_variable_selection_with_dfs(
         elif model_params["scale_function"] == "robust": 
             scaler = RobustScaler()
             
-        # X_scaled = scaler.fit_transform(X) 
         
         # Create a copy of X to avoid modifying the original DataFrame
         X_scaled = X.copy()
-    
-        # Scale only the specified columns (the non-binary columns)
-        columns_to_scale = [
-            df_vars.columns.get_loc(col) for col in model_params["predictors_to_scale"]
-        ]
+
+        # Identify non-binary columns
+        non_binary_columns = [col for col in df_vars.columns if len(df_vars[col].unique()) > 2]
         
+        print(f"scaling: {non_binary_columns}")
+
+        # Scale only the specified non-binary columns
+        columns_to_scale = [
+            df_vars.columns.get_loc(col) for col in non_binary_columns
+        ]
+#         # Scale only the specified columns (the non-binary columns)
+#         columns_to_scale = [
+#             df_vars.columns.get_loc(col) for col in model_params["predictors_to_scale"]
+#         ]
+
+
         X_scaled[:, columns_to_scale] = scaler.fit_transform(X[:, columns_to_scale])
 
     # Otherwise, don't scale them
@@ -340,15 +375,38 @@ def bayesian_variable_selection_with_dfs(
         # Kernel determines the algorithm used to generate the samples.
         # Warmup is where initial samples are discarded before calculating diagnostics
         
+        # Threshold 0.2-0.8. Default 0.5 
+        # Use higher For complex models or when more fine-grained exploration is needed.
+        # Correlation Thresold 0.001 to 0.1. Default 0.01
+        # Use lower for more accurate sampling, especially in high-dimensional spaces.
+        
         trace = pm.sample_smc(
             draws=model_params["draws"],  # Number of samples (previously nparticles)
             kernel=model_params["kernel"],  # pm uses Independent Metropolis Hastings kernel
             model=model,
             cores=model_params["cores"],
             random_seed=42,
-            idata_kwargs = {'log_likelihood': True}
+            idata_kwargs = {'log_likelihood': True},       
         )
         
+    
+#         trace = pm.sample_smc(
+#             draws=model_params["draws"],  # Number of samples (previously nparticles)
+#             kernel=pm.smc.kernels.IMH(threshold=0.7, correlation_threshold=0.005),
+#             model=model,
+#             cores=model_params["cores"],
+#             random_seed=42,
+#             idata_kwargs = {'log_likelihood': True}
+#             # kernel_kwargs={
+#             #     'threshold': 0.7,
+#             #     'correlation_threshold': 0.005
+#             # }        
+#         )
+    
+        if save_model:
+            save_model(model, model_params["experiment_name"])
+            save_trace(trace, model_params["experiment_name"])
+    
     # return trace, model
     return trace
 
@@ -359,7 +417,8 @@ def run_optuna_hyperparameter_optimization(
     df_target,
     model_params,
     n_trials=50,
-    experiment_name="LC_household_pulse_v11_with_race_zscore_norm_optuna",
+    sampler_type='QMC',
+    # experiment_name="LC_household_pulse_v11_with_race_zscore_norm_optuna",
     study_name = "LC_hyperparam_optimization_2cores" # Unique id of hyperparameters study.
 ):
 
@@ -454,7 +513,11 @@ def run_optuna_hyperparameter_optimization(
     storage_name = "sqlite:///{}.db".format(study_name) # DB to store hyperparameters study results
 
     # Use sampler with optuna optimization instead of random sampling
-    sampler = optuna.samplers.QMCSampler()    
+    
+    if sampler_type == 'QMC':
+        sampler = optuna.samplers.QMCSampler()  
+    elif sampler_type == 'TPE':
+        sampler = optuna.samplers.TPESampler()
     
     # Create optuna hyperparameters study
     study = optuna.create_study(
@@ -464,7 +527,7 @@ def run_optuna_hyperparameter_optimization(
         load_if_exists=True  # Resume hyperparameter study if exists
     )
     
-    df_optuna_name = f'Optuna_best_params_{study_name}.csv'
+    df_optuna_name = f'Optuna_best_params_{study_name}_sampler{sampler_type}.csv'
     df_optuna = study.trials_dataframe(attrs=("number", "value", "params", "state")) 
     df_optuna.to_csv(df_optuna_name, index=False) 
 
@@ -484,12 +547,3 @@ def run_optuna_hyperparameter_optimization(
     
     return best_params
 
-
-
-    # # Run the BVS model with the best hyperparameters
-    # best_trace = bayesian_variable_selection_multiple(
-    #     df_variables,
-    #     df_target,
-    #     best_params,
-    #     experiment_name=experiment_name
-    # )

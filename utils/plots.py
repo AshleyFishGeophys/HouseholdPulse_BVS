@@ -170,3 +170,77 @@ def plot_scatter(df_variables, df_target, col_target="Avg"):
         plt.scatter(df_target[[col_target]], df_variables[[var]])
         plt.title(var)
         plt.show()
+        
+        
+def plot_correlation_matrix(
+    df: pd.DataFrame,
+    method: str = 'pearson',
+    plot_title: str = 'Correlation Matrix',
+    corr_label_size: int = 4,
+    axis_label_size: int = 4,
+    fig_size: tuple = (10, 8),
+    save_image: bool = False,
+    image_path: str = None
+) -> None:
+    '''
+    Plots a correlation matrix as a heatmap with seaborn and optionally saves the figure as an image.
+
+    Args:
+        df: The pandas DataFrame containing the data.
+        method: Method of correlation between variables
+            {‘pearson’, ‘kendall’, ‘spearman’} or callable
+            pearson : standard correlation coefficient
+            kendall : Kendall Tau correlation coefficient
+            spearman : Spearman rank correlation
+        save_image: A boolean flag to indicate if the plot should be saved as an image (default: False).
+        plot_title: The title of the plot (default: 'Correlation Matrix').
+        corr_label_size: The font size for correlation values (default: 4).
+        axis_label_size: The font size for axis labels (default: 4).
+        figsize: A tuple specifying the width and height of the figure in inches (default: (10, 8)).
+        save_image: A boolean flag to indicate if the plot should be saved as an image (default: False).
+        image_path: The file path to save the image (default: 'correlation_matrix.png').
+    '''
+    
+    # Calculate the correlation matrix
+    corr_matrix = df.corr(method=method)
+
+    # Create a heatmap with annotated correlation values and tiny font
+    fig, ax = plt.subplots(figsize=fig_size)
+    ax = sns.heatmap(
+        corr_matrix,
+        annot=True,
+        cmap='coolwarm',
+        square=True, 
+        annot_kws={"fontsize": corr_label_size},
+        cbar_kws={"shrink": 0.5}  # Adjust this value to control the colorbar size
+    )
+
+    # Customize the plot (optional)
+    ax.set_title(f"Correlation Matrix: {method}", fontsize=12)
+    
+    # Invert the y-axis to position origin at lower left
+    ax.invert_yaxis()
+    
+    ax.set_xticks(
+        range(len(corr_matrix.columns)),
+        corr_matrix.columns,
+        rotation=45,
+        ha='right'
+    )
+    
+    ax.set_yticks(
+        range(len(corr_matrix.columns)),
+        corr_matrix.columns,
+        # rotation=45,
+        # ha='left'
+    )
+    
+    ax.tick_params(axis='both', labelsize=axis_label_size)  # Set font size for both x and y ticks
+
+    plt.tight_layout()
+    
+    if save_image:
+        plt.savefig(image_path)
+        print(f"Correlation matrix saved to image: {image_path}")
+    
+    plt.show()

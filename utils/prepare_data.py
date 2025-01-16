@@ -392,3 +392,175 @@ def resample_class_imbalance(
 def check_df_for_nan_inf_zero(df):
     print(f"Is NaN: {np.isnan(df).any()}")  # Checks for NaNs
     print(f"Is INF: {np.isinf(df).any()}")  # Checks for infinities
+
+    
+def calc_variable_correlations(
+    df: pd.DataFrame,
+    method: str = "spearman"
+) -> pd.DataFrame:
+    """Calculates correlations between all variables in a pandas DataFrame,
+    sorts by the largest absolute values while maintaining polarity.
+
+    Args:
+      df: The input pandas DataFrame.
+
+    Returns:
+      A pandas DataFrame with sorted correlations.
+    """
+
+    # Calculate the correlation matrix
+    corr_matrix = df.corr(method=method)
+    
+    unstacked_corr = corr_matrix.unstack()
+
+    # Drop duplicates and filter out self-correlations
+    sorted_corr = (
+        unstacked_corr[
+            unstacked_corr.index.get_level_values(0) != unstacked_corr.index.get_level_values(1)]
+        .drop_duplicates()
+        .abs()
+        .sort_values(ascending=False)
+    )
+
+    # Create DataFrame with 'Variable 1', 'Variable 2', and 'Correlation' columns
+    sorted_corr_df = sorted_corr.reset_index()
+    sorted_corr_df.columns = ["Variable 1", "Variable 2", "Correlation"]
+
+    # Restore original sign of correlation
+    sorted_corr_df["Correlation"] = sorted_corr_df.apply(
+        lambda row: corr_matrix.loc[row["Variable 1"], row["Variable 2"]], axis=1
+    )
+
+    return sorted_corr_df    
+
+
+
+def calc_variable_correlations_with_removal(
+    df: pd.DataFrame, 
+    method: str = "spearman", 
+    threshold: float = 0.7
+):
+    """
+    Calculates correlations between all variables in a pandas DataFrame, 
+    sorts by the largest absolute values while maintaining polarity, 
+    and removes variables with correlations exceeding the threshold.
+
+    Args:
+        df: The input pandas DataFrame.
+        method: The correlation method to use ('pearson', 'spearman', etc.).
+        threshold: The correlation threshold for variable removal.
+
+    Returns:
+        A pandas DataFrame with sorted correlations and a list of removed variables.
+    """
+
+# Calculate the correlation matrix
+    corr_matrix = df.corr(method=method)
+    
+    unstacked_corr = corr_matrix.unstack()
+
+    # Drop duplicates and filter out self-correlations
+    sorted_corr = (
+        unstacked_corr[
+            unstacked_corr.index.get_level_values(0) != unstacked_corr.index.get_level_values(1)]
+        .drop_duplicates()
+        .abs()
+        .sort_values(ascending=False)
+    )
+
+    # Create DataFrame with 'Variable 1', 'Variable 2', and 'Correlation' columns
+    sorted_corr_df = sorted_corr.reset_index()
+    sorted_corr_df.columns = ["Variable 1", "Variable 2", "Correlation"]
+
+
+    # Remove variables based on threshold
+    removed_variables = set()
+    for index, row in sorted_corr_df.iterrows():
+        if abs(row["Correlation"]) >= threshold:
+            
+            if row["Variable 1"] not in removed_variables:
+                removed_variables.add(row["Variable 2"])
+                
+            elif row["Variable 2"] not in removed_variables:
+                removed_variables.add(row["Variable 1"])
+
+    # Remove removed variables from the original DataFrame
+    df_cleaned = df.drop(columns=list(removed_variables)) 
+
+    return list(removed_variables), df_cleaned 
+
+def calc_variable_correlations_with_removal_lc_rates(
+    df: pd.DataFrame, 
+    target_var: pd.Series,
+    method: str = "spearman", 
+    threshold: float = 0.7
+):
+    """
+    Calculates correlations between all variables in a pandas DataFrame, 
+    sorts by the largest absolute values while maintaining polarity, 
+    and removes variables with correlations exceeding the threshold.
+
+    Args:
+        df: The input pandas DataFrame.
+        method: The correlation method to use ('pearson', 'spearman', etc.).
+        threshold: The correlation threshold for variable removal.
+
+    Returns:
+        A pandas DataFrame with sorted correlations and a list of removed variables.
+    """
+
+    # Calculate correlations between each variable and the target
+    corr_var_target = df.corrwith(target_var, method=method)
+    
+    # Calculate the correlation matrix within variables
+    corr_matrix = df.corr(method=method)
+    
+    unstacked_corr = corr_matrix.unstack()
+
+    # Drop duplicates and filter out self-correlations
+    sorted_corr = (
+        unstacked_corr[
+            unstacked_corr.index.get_level_values(0) != unstacked_corr.index.get_level_values(1)]
+        .drop_duplicates()
+        .abs()
+        .sort_values(ascending=False)
+    )
+
+    # Create DataFrame with 'Variable 1', 'Variable 2', and 'Correlation' columns
+    sorted_corr_df = sorted_corr.reset_index()
+    sorted_corr_df.columns = ["Variable 1", "Variable 2", "Correlation"]
+
+
+    # Remove variables based on threshold
+    removed_variables = set()
+    for index, row in sorted_corr_df.iterrows():
+        if abs(row["Correlation"]) >= threshold:
+            
+            if row["Variable 1"] == "Urban" and row["Variable 2"] == "Rural" \
+                or row["Variable 1"] == "Rural" and row["Variable 2"] == "Urban":
+                print(f'corr_var_target["Urban"]: {corr_var_target["Urban"]}')
+                print(f'corr_var_target["Rural"]: {corr_var_target["Rural"]}')
+                if abs(corr_var_target["Urban"]) > abs(corr_var_target["Rural"]):
+                    removed_variables.add("Rural")
+                else:
+                    removed_variables.add("Urban")
+                    
+            if row["Variable 1"] == "Liberal" and row["Variable 2"] == "Conservative" \
+                or row["Variable 1"] == "Conservative" and row["Variable 2"] == "Liberal":
+                print(f'corr_var_target["Liberal"]: {corr_var_target["Liberal"]}')
+                print(f'corr_var_target["Conservative"]: {corr_var_target["Conservative"]}')
+                if abs(corr_var_target["Liberal"]) > abs(corr_var_target["Conservative"]):
+                    removed_variables.add("Conservative")
+                else:
+                    removed_variables.add("Liberal")
+                    
+            elif row["Variable 1"] not in removed_variables:
+                removed_variables.add(row["Variable 2"])
+                
+            elif row["Variable 2"] not in removed_variables:
+                removed_variables.add(row["Variable 1"])
+
+    # Remove removed variables from the original DataFrame
+    df_cleaned = df.drop(columns=list(removed_variables)) 
+
+    return list(removed_variables), df_cleaned 

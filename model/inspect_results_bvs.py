@@ -4,6 +4,12 @@ import xarray as xr
 import pandas as pd
 import sqlite3
 
+
+def load_inference_data(path):
+    
+    
+    return inference_data
+
 def extract_inference_results(inference_results):
     posterior_avg_df  = inference_results.to_dataframe()
     sample_stats_avg_df = inference_results.sample_stats.to_dataframe()
@@ -15,8 +21,10 @@ def extract_inference_results(inference_results):
 def plot_trace(inference_results, var_names=["beta", "beta_raw", "sigma", "ind", "mu"]):
     az.plot_trace(inference_results, var_names=var_names);
 
+    
 def plot_forest(inference_results, var_names=["beta"]):
     az.plot_forest(inference_results, var_names=var_names, combined=True, hdi_prob=0.95, r_hat=True);
+    
     
 def plot_ess(summary_df, variables, states):
     """Plots Effective Sample Size (ESS) for bulk and tail of
@@ -116,6 +124,7 @@ def plot_importance(
 def get_summary(inference_results):
     summary_df = az.summary(inference_results, round_to=4)
     return summary_df
+    
     
 def get_specific_inference_data(summary_df, col_type='mean', col='beta'):
     """
