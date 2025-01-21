@@ -19,8 +19,7 @@ def bayesian_variable_selection_multiple(
     df_values: pd.DataFrame,
     model_params: dict,
     experiment_name: str = "LC_household_pulse_v11",
-    save_model: bool = True
-
+    # save_model: bool = False
 ) -> list:
     """Performs Bayesian Variable Selection for multiple target
     variables in two pandas DataFrames, one containing variables and
@@ -80,7 +79,7 @@ def bayesian_variable_selection_multiple(
             df_values[target_col],  # series containing Long COVID rates
             target_col,  # corresponding column header to rate values
             model_params, # model parameters for BVS
-            save_model=True
+            # save_model=False
         )
         
         traces.append(trace)  # append BVS results to list
@@ -101,10 +100,10 @@ def bayesian_variable_selection_multiple(
 #         pickle.dump({"model": model, "trace": trace}, buff)
 
 
-def save_model(model, model_path):
+def save_the_model(model, model_path):
     
     # pm.dump(model, f'{model_name}.h5')
-    pm.save_model(model, f"./model_{experiment_name}.h5")
+    pm.dump(model, f"./model_{experiment_name}.h5")
     
 
 def save_trace(trace, experiment_name):
@@ -196,7 +195,7 @@ def bayesian_variable_selection_with_dfs(
     target_col: str, 
     model_params: dict,
     imputer_strategy: str = 'mean',
-    save_model: bool = False
+    # save_model: bool = False
 ) -> pm.backends.base.MultiTrace:
     """Performs Bayesian Variable Selection using PyMC3
     on a pandas DataFrame containing variables and a pandas
@@ -403,9 +402,9 @@ def bayesian_variable_selection_with_dfs(
 #             # }        
 #         )
     
-        if save_model:
-            save_model(model, model_params["experiment_name"])
-            save_trace(trace, model_params["experiment_name"])
+        # if save_model:
+        #     save_the_model(model, model_params["experiment_name"])
+        #     save_trace(trace, model_params["experiment_name"])
     
     # return trace, model
     return trace
