@@ -1,4 +1,6 @@
 import optuna
+import optunahub
+
 import logging
 import sys
 import datetime
@@ -12,6 +14,7 @@ import xarray as xr
 import json
 import pandas as pd
 import numpy as np
+import torch
 
 
 def bayesian_variable_selection_multiple(
@@ -19,7 +22,7 @@ def bayesian_variable_selection_multiple(
     df_values: pd.DataFrame,
     model_params: dict,
     experiment_name: str = "LC_household_pulse_v11",
-    # save_model: bool = False
+    save_bvs_model: bool = False
 ) -> list:
     """Performs Bayesian Variable Selection for multiple target
     variables in two pandas DataFrames, one containing variables and
@@ -74,21 +77,28 @@ def bayesian_variable_selection_multiple(
     # Iterate through columns in Long COVID rate dataframe
     for target_col in df_values.columns:
 
+        print("BVS starting")
         trace = bayesian_variable_selection_with_dfs(
             df_vars,  # dataframe containing variables
             df_values[target_col],  # series containing Long COVID rates
             target_col,  # corresponding column header to rate values
-            model_params, # model parameters for BVS
-            # save_model=False
+            model_params # model parameters for BVS
+            # save_bvs_model=save_bvs_model
         )
         
         traces.append(trace)  # append BVS results to list
+        
+        print("Saving trace")
         
         save_inference_arviz_to_df(
             inferece_results_az=trace,
             target_name=f"{target_col}",
             model_params=model_params
         )
+        
+        print("Trace saved")
+        
+    print("BVS complete")
         
     return traces
 
@@ -100,10 +110,10 @@ def bayesian_variable_selection_multiple(
 #         pickle.dump({"model": model, "trace": trace}, buff)
 
 
-def save_the_model(model, model_path):
+# def save_the_model(model, experiment_name):
     
-    # pm.dump(model, f'{model_name}.h5')
-    pm.dump(model, f"./model_{experiment_name}.h5")
+#     # pm.dump(model, f'{model_name}.h5')
+#     pm.dump(model, f"./model_{experiment_name}.h5")
     
 
 def save_trace(trace, experiment_name):
@@ -194,8 +204,8 @@ def bayesian_variable_selection_with_dfs(
     series_values: pd.Series,
     target_col: str, 
     model_params: dict,
-    imputer_strategy: str = 'mean',
-    # save_model: bool = False
+    imputer_strategy: str = 'mean'
+    # save_bvs_model: bool = False
 ) -> pm.backends.base.MultiTrace:
     """Performs Bayesian Variable Selection using PyMC3
     on a pandas DataFrame containing variables and a pandas
@@ -280,7 +290,6 @@ def bayesian_variable_selection_with_dfs(
 #         columns_to_scale = [
 #             df_vars.columns.get_loc(col) for col in model_params["predictors_to_scale"]
 #         ]
-
 
         X_scaled[:, columns_to_scale] = scaler.fit_transform(X[:, columns_to_scale])
 
@@ -374,11 +383,6 @@ def bayesian_variable_selection_with_dfs(
         # Kernel determines the algorithm used to generate the samples.
         # Warmup is where initial samples are discarded before calculating diagnostics
         
-        # Threshold 0.2-0.8. Default 0.5 
-        # Use higher For complex models or when more fine-grained exploration is needed.
-        # Correlation Thresold 0.001 to 0.1. Default 0.01
-        # Use lower for more accurate sampling, especially in high-dimensional spaces.
-        
         trace = pm.sample_smc(
             draws=model_params["draws"],  # Number of samples (previously nparticles)
             kernel=model_params["kernel"],  # pm uses Independent Metropolis Hastings kernel
@@ -387,24 +391,6 @@ def bayesian_variable_selection_with_dfs(
             random_seed=42,
             idata_kwargs = {'log_likelihood': True},       
         )
-        
-    
-#         trace = pm.sample_smc(
-#             draws=model_params["draws"],  # Number of samples (previously nparticles)
-#             kernel=pm.smc.kernels.IMH(threshold=0.7, correlation_threshold=0.005),
-#             model=model,
-#             cores=model_params["cores"],
-#             random_seed=42,
-#             idata_kwargs = {'log_likelihood': True}
-#             # kernel_kwargs={
-#             #     'threshold': 0.7,
-#             #     'correlation_threshold': 0.005
-#             # }        
-#         )
-    
-        # if save_model:
-        #     save_the_model(model, model_params["experiment_name"])
-        #     save_trace(trace, model_params["experiment_name"])
     
     # return trace, model
     return trace
@@ -420,33 +406,45 @@ def run_optuna_hyperparameter_optimization(
     # experiment_name="LC_household_pulse_v11_with_race_zscore_norm_optuna",
     study_name = "LC_hyperparam_optimization_2cores" # Unique id of hyperparameters study.
 ):
-
     
     def objective(trial):
         """
         Why Negative Log-Likelihood?
 
-        In statistical modeling, we often aim to find the parameters that maximize the likelihood of the observed data. The likelihood function measures the probability of observing the data given a specific set of parameter values. However, directly maximizing the likelihood can be computationally challenging, especially when dealing with products of probabilities.   
+        In statistical modeling, we often aim to find the parameters that maximize the
+        likelihood of the observed data. The likelihood function measures the probability
+        of observing the data given a specific set of parameter values. However, directly
+        maximizing the likelihood can be computationally challenging, especially when
+        dealing with products of probabilities.   
 
-        To address this, we often work with the log-likelihood. Taking the logarithm of the likelihood function has several advantages:
+        To address this, we often work with the log-likelihood. Taking the logarithm of
+        the likelihood function has several advantages:
 
         Transforms Product into Sum:
 
-        The logarithm turns products into sums, which are computationally more efficient and numerically stable. This is particularly beneficial when dealing with a large number of data points.   
+        The logarithm turns products into sums, which are computationally more efficient
+        and numerically stable. This is particularly beneficial when dealing with a large
+        number of data points.   
+        
         Monotonic Transformation:
 
-        The logarithm is a monotonic function, meaning that maximizing the log-likelihood is equivalent to maximizing the likelihood itself. This allows us to optimize the log-likelihood without losing any information.   
+        The logarithm is a monotonic function, meaning that maximizing the log-likelihood is
+        equivalent to maximizing the likelihood itself. This allows us to optimize the
+        log-likelihood without losing any information.   
         Numerical Stability:
 
-        By taking the logarithm, we can avoid underflow issues that may arise when multiplying very small probabilities.   
-        However, most optimization algorithms are designed to minimize functions, not maximize them. Therefore, we introduce the negative sign to convert the maximization problem into a minimization problem.
+        By taking the logarithm, we can avoid underflow issues that may arise when multiplying
+        very small probabilities. However, most optimization algorithms are designed to
+        minimize functions, not maximize them. Therefore, we introduce the negative sign
+        to convert the maximization problem into a minimization problem.
 
         In summary, we use the negative log-likelihood as an objective function because:
 
         It simplifies the optimization process.
         It improves numerical stability.
         It allows us to use efficient optimization algorithms.   
-        By minimizing the negative log-likelihood, we effectively maximize the likelihood of the observed data, leading to a better-fitting model.
+        By minimizing the negative log-likelihood, we effectively maximize the likelihood
+        of the observed data, leading to a better-fitting model.
 
         """
         # Define hyperparameters using trial.suggest_* methods
@@ -454,30 +452,58 @@ def run_optuna_hyperparameter_optimization(
         # alpha_sigma Controls the "shape" of the distribution. 
         # Higher values lead to a distribution concentrated
         # towards lower sigma (less noise).
+        # alpha_sigma = trial.suggest_float(
+        #     'alpha_sigma',
+        #     1.0, 5.0, step=0.25 
+        # )
+        
         alpha_sigma = trial.suggest_float(
             'alpha_sigma',
-            1.0, 10.0, step=0.5 
+            model_params['alpha_sigma_start'],
+            model_params['alpha_sigma_stop'],
+            step=model_params['alpha_sigma_step'],
         )
         
         # beta_sigma: Controls the "scale" of the distribution.
         # Higher values allow for larger stds (more noise).
+        # beta_sigma = trial.suggest_float(
+        #     'beta_sigma',
+        #     0.1, 1.0, step=0.1
+        # )
+        
         beta_sigma = trial.suggest_float(
             'beta_sigma',
-            0.1, 1.0, step=0.1
+            model_params['beta_sigma_start'],
+            model_params['beta_sigma_stop'],
+            step=model_params['beta_sigma_step'],
         )
         
         # The actual standard deviation of the noise term in the model.
-        sigma = trial.suggest_int(
+#         sigma = trial.suggest_float(
+#             'sigma',
+#             1.0, 5.0, step=0.25
+#         )
+        
+        sigma = trial.suggest_float(
             'sigma',
-            1, 5, step=1
+            model_params['sigma_start'],
+            model_params['sigma_stop'],
+            step=model_params['sigma_step'],
         )
         
         # This defines the prior distribution for the indicator
         # variables (ind) using a Bernoulli distribution. These
         # indicators control which features are included in the model. 
+        # prob_of_success = trial.suggest_float(
+        #     'prob_of_success',
+        #     0.1, 1.0, step=0.1
+        # )
+        
         prob_of_success = trial.suggest_float(
             'prob_of_success',
-            0.1, 0.5, step=0.1
+            model_params['prob_of_success_start'],
+            model_params['prob_of_success_stop'],
+            step=model_params['prob_of_success_step'],
         )
 
         # Update model parameters
@@ -498,7 +524,7 @@ def run_optuna_hyperparameter_optimization(
         log_likelihood = idata.log_likelihood.likelihood.values
         
         mean_log_likelihood = np.mean(log_likelihood)
-        print(mean_log_likelihood)
+        # print(mean_log_likelihood)
         
         trial.set_user_attr("mean_log_likelihood", mean_log_likelihood)
         
@@ -509,14 +535,22 @@ def run_optuna_hyperparameter_optimization(
     optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
     
     # Save data in sqlite db
-    storage_name = "sqlite:///{}.db".format(study_name) # DB to store hyperparameters study results
+    # DB to store hyperparameters study results
+    storage_name = "sqlite:///{}.db".format(study_name) 
 
     # Use sampler with optuna optimization instead of random sampling
+    if sampler_type == "AUTO_SAMPLER":
+        sampler = optunahub.load_module("samplers/auto_sampler").AutoSampler()
     
-    if sampler_type == 'QMC':
+    elif sampler_type == 'QMC':
         sampler = optuna.samplers.QMCSampler()  
+    
     elif sampler_type == 'TPE':
         sampler = optuna.samplers.TPESampler()
+    
+    elif sampler_type == 'GPS':
+        sampler = optuna.samplers.GPSampler()
+        
     
     # Create optuna hyperparameters study
     study = optuna.create_study(
@@ -526,12 +560,38 @@ def run_optuna_hyperparameter_optimization(
         load_if_exists=True  # Resume hyperparameter study if exists
     )
     
-    df_optuna_name = f'Optuna_best_params_{study_name}_sampler{sampler_type}.csv'
-    df_optuna = study.trials_dataframe(attrs=("number", "value", "params", "state")) 
-    df_optuna.to_csv(df_optuna_name, index=False) 
-
     # Optimize hyperparameters (sensitivity analysis)
-    study.optimize(objective, n_trials=n_trials)
+    study.optimize(
+        objective,
+        n_trials=n_trials,
+        gc_after_trial=True,
+        show_progress_bar=True
+    )
+    
+    
+    # Get current date so that we can keep track of when
+    # the hyperparameter optimization was run
+    now = datetime.datetime.now()
+    formatted_date = now.strftime('%m-%d-%Y_%H-%M-%S')
+    
+    df_optuna_name = f'Optuna-param-optimization_{study_name}_sampler-{sampler_type}_{formatted_date}.csv'
+    
+    # df_optuna = study.trials_dataframe(attrs=("number", "value", "params", "state")) 
+    df_optuna = study.trials_dataframe(
+        attrs=(
+            'number',
+            'value',
+            'params',
+            'state',
+            'datetime_start',
+            'datetime_complete',
+            'duration',
+            'user_attrs',
+            'system_attrs'
+        )
+    )
+        
+    df_optuna.to_csv(df_optuna_name, index=False) 
 
     # Save the sampler with pickle to be loaded later.
     # with open("sampler.pkl", "wb") as fout:
@@ -545,4 +605,7 @@ def run_optuna_hyperparameter_optimization(
     #     json.dump(params_to_save, f, indent=4)
     
     return best_params
+        
+        
+                
 

@@ -4,11 +4,13 @@ import xarray as xr
 import pandas as pd
 import sqlite3
 
+import matplotlib.pyplot as plt
 
-def load_inference_data(path):
-    
-    
-    return inference_data
+
+def load_inference_data(file_path):
+    inference_df = pd.load_csv(file_path)
+    return inference_df
+
 
 def extract_inference_results(inference_results):
     posterior_avg_df  = inference_results.to_dataframe()
