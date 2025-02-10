@@ -3,6 +3,7 @@ import arviz as az
 import xarray as xr
 import pandas as pd
 import sqlite3
+import statsmodels.api as sm
 
 import matplotlib.pyplot as plt
 
@@ -153,3 +154,78 @@ def calculate_importance(ind_means, beta_raw):
     importance = np.multiply(ind_means.values.flatten(), beta_raw.values.flatten())
     
     return importance
+
+
+import pandas as pd
+import statsmodels.api as sm
+
+def calculate_p_values(
+    df_vars,
+    series_target,
+    scale_function="z-score",
+    imputer_strategy: str = 'mean'
+):
+    """
+    Calculates p-values for a linear regression model.
+
+    Args:
+        df_vars: Pandas DataFrame with predictor columns.
+        series_target: Pandas Series with the target variable.
+
+    Returns:
+        A Pandas Series containing the p-values for each predictor,
+        or None if there's an issue with the model.
+    """
+    # Extract data from DataFrames
+    y = series_target.values  # Long COVID rates
+    X = df_vars.values  # Variables affecting/not affecting LC rates
+
+    # If scale predictor variables (df_vars)
+    # Scale only the variables which are not binary
+    # scaling predictor variables, especially non-binary ones, can be beneficial
+    # for Bayesian variable selection using Monte Carlo simulations.
+    # It improves convergence and interpretability. Scaling binary variables, however, 
+    # Can introduce unecessary complexity.
+    if scale_function: 
+        # Z-score: If your data is normally distributed and you want to
+        # preserve the relative distances between data points.
+        if scale_function == "z-score": 
+            scaler = StandardScaler() 
+            
+        # Min-Max: If you want to scale the data to a specific range
+        elif scale_function == "min-max": 
+            scaler = MinMaxScaler()
+            
+        # Robust: If your data contains outliers that might affect the scaling.
+        elif scale_function == "robust": 
+            scaler = RobustScaler()
+            
+        # Create a copy of X to avoid modifying the original DataFrame
+        X_scaled = X.copy()
+
+        # Identify non-binary columns
+        non_binary_columns = [col for col in df_vars.columns if len(df_vars[col].unique()) > 2]
+        
+        print(f"scaling: {non_binary_columns}")
+
+        # Scale only the specified non-binary columns
+        columns_to_scale = [
+            df_vars.columns.get_loc(col) for col in non_binary_columns
+        ]
+
+        X_scaled[:, columns_to_scale] = scaler.fit_transform(X[:, columns_to_scale])
+
+    # Otherwise, don't scale them
+    else: 
+        X_scaled = X.copy()
+    
+    # Impute missing values using SimpleImputer, if there are any missing values.
+    # Replace 'mean' with 'median' or 'most_frequent' if needed
+    imputer = SimpleImputer(strategy=imputer_strategy)  
+    X_imputed = imputer.fit_transform(X_scaled)          
+    
+    X_imputed = sm.add_constant(X_imputed)  # Add intercept
+    model = sm.OLS(y, X_imputed).fit()  # Fit the model
+    p_values = pd.Series(model.pvalues[1:], index=df_vars.columns) # Use original column names
+
+    return p_values
