@@ -2,9 +2,12 @@ import sqlite3
 
 
 def show_all_database_objects(db_file):
-    """Inspect Optuna hyperparameter optimization results
-    saved in sqlite database. Show all object stored within 
-    database.
+    """ Inspects an Optuna hyperparameter optimization results database (SQLite)
+    and displays information about all objects (tables, views, indexes, triggers)
+    stored within it.
+
+    Args:
+        db_file: The path to the SQLite database file.
     """
     conn = sqlite3.connect(db_file)
     cursor = conn.cursor()
@@ -28,6 +31,7 @@ def show_all_database_objects(db_file):
             # Print rows with formatted output
             for row in rows:
                 print('\t'.join(str(value) for value in row))
+                
         elif type == 'index':
             # Print index details
             cursor.execute(f"PRAGMA index_info({name})")
@@ -35,12 +39,14 @@ def show_all_database_objects(db_file):
             print("Index Information:")
             for info in index_info:
                 print(info)
+                
         elif type == 'trigger':
             # Print trigger definition
             cursor.execute(f"SELECT sql FROM sqlite_master WHERE type='trigger' AND name='{name}'")
             trigger_definition = cursor.fetchone()[0]
             print("Trigger Definition:")
             print(trigger_definition)
+            
         else:
             print("Not a table, view, or index. Cannot display contents.")
 
@@ -49,8 +55,21 @@ def show_all_database_objects(db_file):
     
     
 def find_best_trial_and_params(db_file):
-    """Finde the best trial number and parameters for that trial from the
-    Optuna hyperparameter optimization trial stored within the database.
+    """Finds the best trial number and its corresponding hyperparameters from an
+    Optuna hyperparameter optimization trial stored in a SQLite database.
+
+    The "best" trial is determined by the most *negative* `value_json`
+    (since Optuna minimizes the objective function, which is negative log
+    likelihood, by default).
+
+    Args:
+        db_file: The path to the Optuna SQLite database file.
+
+    Returns:
+        tuple: A tuple containing the best trial ID (int) and a dictionary
+               of the best hyperparameters.  Returns (None, None) if no best
+               trial is found.
+
     """
     conn = sqlite3.connect(db_file)
     cursor = conn.cursor()

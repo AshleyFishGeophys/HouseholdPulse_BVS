@@ -1,9 +1,13 @@
 import scipy.stats as stats
+import scipy.stats as stats_qq
 import scipy.cluster.hierarchy as shc 
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import pandas as pd
 import seaborn as sns  
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+import statsmodels.api as sm
 
 def create_qq_plot(
     data: pd.Series
@@ -244,3 +248,166 @@ def plot_correlation_matrix(
         print(f"Correlation matrix saved to image: {image_path}")
     
     plt.show()
+    
+    
+
+def plot_p_values(df_results, alpha=0.05):
+    """
+    Generates a grouped bar plot of corrected p-values (Pearson, Spearman, Kendall)
+    for each variable, with an optional horizontal line indicating the alpha level.
+
+    Args:
+        df_results: Pandas DataFrame containing the results of correlation tests,
+                    including p-values for Pearson, Spearman, and Kendall.
+        alpha: (Optional) Significance level. If provided, a horizontal line will be
+               drawn at this value. Defaults to 0.05.
+
+    Returns:
+        None (displays the plot).
+
+    """
+    
+    variables = df_results['Variable']
+    p_value_pearson = df_results['Pearson_p_value'].astype(float) #Convert to float.
+    p_value_spearman = df_results['Spearman_p_value'].astype(float) #Convert to float.
+    p_value_kendall = df_results['Kendall_p_value'].astype(float) #Convert to float.
+
+    width = 0.2  # Width of each bar
+
+    x = range(len(variables))  # X-axis positions for the bars
+
+    plt.figure(figsize=(12, 6))  # Adjust figure size as needed
+
+    plt.bar([i - width for i in x], p_value_pearson, width, label='Pearson p-value')
+    plt.bar(x, p_value_spearman, width, label='Spearman p-value')
+    plt.bar([i + width for i in x], p_value_kendall, width, label='Kendall p-value')
+
+    plt.xticks(x, variables, rotation=45, ha='right')  # Set x-axis labels and rotate
+    plt.ylabel("P-value")
+    plt.title("NULL Hypothesis: P-values")
+    plt.legend()
+    plt.tight_layout()
+    plt.grid(axis='y', alpha=0.5)  # Add a subtle grid
+    
+    if alpha is not None:  # Add horizontal line if alpha is provided
+        plt.axhline(y=alpha, color='r', linestyle='--', label=f"Alpha = {alpha}")
+        plt.legend()  # Update the legend to include the alpha line
+
+    plt.show()
+    
+    
+def plot_p_values_false_discovery_corrected(df_results, alpha=0.05):
+    """
+    Generates a grouped bar plot of corrected p-values (Pearson, Spearman, Kendall)
+    for each variable, with an optional horizontal line indicating the alpha level.
+
+    Args:
+        df_results: Pandas DataFrame containing the results of correlation tests,
+                    including corrected p-values for Pearson, Spearman, and Kendall.
+        alpha: (Optional) Significance level. If provided, a horizontal line will be
+               drawn at this value. Defaults to 0.05.
+
+    Returns:
+        None (displays the plot).
+
+    """
+    
+    variables = df_results['Variable']
+    p_value_pearson = df_results['Pearson_p_value_corrected'].astype(float) #Convert to float.
+    p_value_spearman = df_results['Spearman_p_value_corrected'].astype(float) #Convert to float.
+    p_value_kendall = df_results['Kendall_p_value_corrected'].astype(float) #Convert to float.
+
+    width = 0.2  # Width of each bar
+
+    x = range(len(variables))  # X-axis positions for the bars
+
+    plt.figure(figsize=(12, 6))  # Adjust figure size as needed
+
+    plt.bar([i - width for i in x], p_value_pearson, width, label='Pearson p-value corrected')
+    plt.bar(x, p_value_spearman, width, label='Spearman p-value corrected')
+    plt.bar([i + width for i in x], p_value_kendall, width, label='Kendall p-value corrected')
+
+    plt.xticks(x, variables, rotation=45, ha='right')  # Set x-axis labels and rotate
+    plt.ylabel("P-value corrected")
+    plt.title("NULL Hypothesis: P-values corrected")
+    plt.legend()
+    plt.tight_layout()
+    plt.grid(axis='y', alpha=0.5)  # Add a subtle grid
+    
+    if alpha is not None:  # Add horizontal line if alpha is provided
+        plt.axhline(y=alpha, color='r', linestyle='--', label=f"Alpha = {alpha}")
+        plt.legend()  # Update the legend to include the alpha line
+
+    plt.show()
+
+    
+    
+
+
+def plots_null_hypothesis(df_vars, target):  # Target can be a Series or array
+    """
+    Generates plots to visually assess the relationship between numeric variables
+    and a target variable, including regression plots, histograms, and Q-Q plots.
+
+    This function scales numeric variables, imputes missing values, and then creates
+    visualizations for each variable to help assess the null hypothesis (typically
+    that there is no relationship between the variable and the target).
+
+    Args:
+        df_vars: Pandas DataFrame containing the independent variables.  Only numeric
+                 columns will be used.
+        target: Pandas Series or array-like containing the target variable.
+
+    Returns:
+        None (displays the plots).  Prints an error message if no numeric columns
+        are found in `df_vars`.
+    """
+    
+    numeric_vars = df_vars.select_dtypes(include='number')
+    if numeric_vars.empty:
+        print("Error: No numeric columns found in the DataFrame.")
+        return
+
+    X = numeric_vars.values
+    target_array = np.array(target) # Target to numpy array.
+
+    # Scale data (z-score scaling)
+    X_scaled = X.copy()
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # Impute missing values, if any
+    imputer = SimpleImputer(strategy='mean')
+    X_imputed = imputer.fit_transform(X_scaled)
+
+    for i, var_name in enumerate(numeric_vars.columns):  # Iterate through columns
+        variable_data = X_imputed[:, i]  # Get the data for the current variable
+
+        # --- Visualizations ---
+        plt.figure(figsize=(10, 6))
+        sns.regplot(x=variable_data, y=target_array, scatter_kws={'alpha': 0.5}, line_kws={'color': 'red'})
+        plt.xlabel(var_name, fontsize=12)
+        plt.ylabel("Target Variable", fontsize=12)
+        plt.title(f"Scatter Plot & Regression Line of {var_name} vs. Target", fontsize=14)
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+        # Histograms for Normality Check
+        plt.figure(figsize=(8, 5))
+        sns.histplot(variable_data, kde=True)
+        plt.xlabel(var_name, fontsize=12)
+        plt.title(f"Histogram of {var_name}", fontsize=14)
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+        # Q-Q Plot for Normality Check
+        plt.figure(figsize=(8, 5))
+        sm.qqplot(variable_data, stats_qq.norm, line='s')
+        plt.title(f"Q-Q Plot of {var_name}", fontsize=14)
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+

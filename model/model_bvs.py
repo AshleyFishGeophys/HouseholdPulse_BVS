@@ -117,6 +117,16 @@ def bayesian_variable_selection_multiple(
     
 
 def save_trace(trace, experiment_name):
+    """ Saves trace data from BVS experiment
+    Args:
+        trace: The PyMC trace object to save.
+        experiment_name: A string representing the name of the experiment.
+                         This will be used to create the directory name.
+
+    Returns:
+        None.
+
+    """
     pm.save_trace(
         trace,
         directory=f"./trace_{experiment_name}",
@@ -406,9 +416,35 @@ def run_optuna_hyperparameter_optimization(
     # experiment_name="LC_household_pulse_v11_with_race_zscore_norm_optuna",
     study_name = "LC_hyperparam_optimization_2cores" # Unique id of hyperparameters study.
 ):
+    """ Performs hyperparameter optimization for Bayesian Variable Selection (BVS)
+    using Optuna.
+
+    This function defines an objective function for Optuna that trains a BVS model
+    with varying hyperparameters, calculates the mean log-likelihood, and returns
+    it for optimization.  It then uses Optuna to search for the best hyperparameters
+    by minimizing the negative log-likelihood (maximizing the likelihood).
+
+    Args:
+        df_variables: Pandas DataFrame containing the independent variables.
+        df_target: Pandas DataFrame or Series containing the target variable.
+        model_params: Dictionary containing initial model parameters for the BVS model.
+                       This dictionary will be updated with the hyperparameters
+                       suggested by Optuna.  It should include starting/stopping values and steps
+                       for the hyperparameters: 'alpha_sigma', 'beta_sigma', 'sigma',
+                       and 'prob_of_success'.
+        n_trials: (Optional) The number of trials to run Optuna. Defaults to 50.
+        sampler_type: (Optional) The type of Optuna sampler to use.  Can be 'QMC',
+                    'TPE', 'GPS', or 'AUTO_SAMPLER'. Defaults to 'QMC'.
+        study_name: (Optional) A unique name for the Optuna study. This is used for storing the
+                    results. Defaults to "LC_hyperparam_optimization_2cores".
+
+    Returns:
+        dict: A dictionary containing the best hyperparameters found by Optuna.
+    """
     
     def objective(trial):
-        """
+        """ Objective function for Optuna optimization.
+        
         Why Negative Log-Likelihood?
 
         In statistical modeling, we often aim to find the parameters that maximize the
@@ -431,6 +467,7 @@ def run_optuna_hyperparameter_optimization(
         The logarithm is a monotonic function, meaning that maximizing the log-likelihood is
         equivalent to maximizing the likelihood itself. This allows us to optimize the
         log-likelihood without losing any information.   
+        
         Numerical Stability:
 
         By taking the logarithm, we can avoid underflow issues that may arise when multiplying
@@ -439,37 +476,22 @@ def run_optuna_hyperparameter_optimization(
         to convert the maximization problem into a minimization problem.
 
         In summary, we use the negative log-likelihood as an objective function because:
-
-        It simplifies the optimization process.
-        It improves numerical stability.
-        It allows us to use efficient optimization algorithms.   
-        By minimizing the negative log-likelihood, we effectively maximize the likelihood
-        of the observed data, leading to a better-fitting model.
+            It simplifies the optimization process.
+            It improves numerical stability.
+            It allows us to use efficient optimization algorithms.   
+            By minimizing the negative log-likelihood, we effectively maximize the likelihood
+            of the observed data, leading to a better-fitting model.
 
         """
         # Define hyperparameters using trial.suggest_* methods
-        
-        # alpha_sigma Controls the "shape" of the distribution. 
-        # Higher values lead to a distribution concentrated
-        # towards lower sigma (less noise).
-        # alpha_sigma = trial.suggest_float(
-        #     'alpha_sigma',
-        #     1.0, 5.0, step=0.25 
-        # )
-        
+
         alpha_sigma = trial.suggest_float(
             'alpha_sigma',
             model_params['alpha_sigma_start'],
             model_params['alpha_sigma_stop'],
             step=model_params['alpha_sigma_step'],
         )
-        
-        # beta_sigma: Controls the "scale" of the distribution.
-        # Higher values allow for larger stds (more noise).
-        # beta_sigma = trial.suggest_float(
-        #     'beta_sigma',
-        #     0.1, 1.0, step=0.1
-        # )
+
         
         beta_sigma = trial.suggest_float(
             'beta_sigma',
@@ -478,11 +500,6 @@ def run_optuna_hyperparameter_optimization(
             step=model_params['beta_sigma_step'],
         )
         
-        # The actual standard deviation of the noise term in the model.
-#         sigma = trial.suggest_float(
-#             'sigma',
-#             1.0, 5.0, step=0.25
-#         )
         
         sigma = trial.suggest_float(
             'sigma',
@@ -490,14 +507,6 @@ def run_optuna_hyperparameter_optimization(
             model_params['sigma_stop'],
             step=model_params['sigma_step'],
         )
-        
-        # This defines the prior distribution for the indicator
-        # variables (ind) using a Bernoulli distribution. These
-        # indicators control which features are included in the model. 
-        # prob_of_success = trial.suggest_float(
-        #     'prob_of_success',
-        #     0.1, 1.0, step=0.1
-        # )
         
         prob_of_success = trial.suggest_float(
             'prob_of_success',

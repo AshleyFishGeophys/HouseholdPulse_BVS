@@ -489,6 +489,7 @@ def calc_variable_correlations_with_removal(
 
     return list(removed_variables), df_cleaned 
 
+
 def calc_variable_correlations_with_removal_lc_rates(
     df: pd.DataFrame, 
     target_var: pd.Series,
@@ -564,3 +565,38 @@ def calc_variable_correlations_with_removal_lc_rates(
     df_cleaned = df.drop(columns=list(removed_variables)) 
 
     return list(removed_variables), df_cleaned 
+
+
+def clean_up_data(sample_stats, df_variables):
+    """ Extracts beta mean statistics from sample statistics and aligns them with 
+    variable labels from a DataFrame.
+
+    This function filters rows in `sample_stats` that start with "beta" (but not "beta_raw"),
+    and then uses the column names from `df_variables` as the new index for the filtered data.
+
+    Args:
+        sample_stats: Pandas DataFrame containing sample statistics, likely including 
+                      beta values. The index of this DataFrame is assumed to contain
+                      strings that identify the statistic.
+        df_variables: Pandas DataFrame containing the variable names.  The *columns* of this
+                      DataFrame are assumed to correspond to the beta values in `sample_stats`.
+
+    Returns:
+        beta_means_results: A DataFrame containing the extracted beta means, with the 
+                          variable names from `df_variables` as the index.
+    
+    """
+    beta_means_results  = sample_stats.loc[
+        sample_stats.index.str.startswith('beta') & ~sample_stats.index.str.startswith('beta_raw')
+    ]   
+    x_labels = list(df_variables.columns)
+    
+    beta_means_results.set_index(pd.Index(x_labels), inplace=True)
+    
+    return beta_means_results
+
+
+def save_cleaned_results(df, save_path):
+    """ Save pandas pd df to csv
+    """
+    df.to_csv(save_path, index=True) 
