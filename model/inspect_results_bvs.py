@@ -9,56 +9,100 @@ from statsmodels.stats.multitest import multipletests
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
 import matplotlib.pyplot as plt
+from arviz import InferenceData  # Import InferenceData type
 
 
-def load_inference_data(file_path):
+def load_inference_data(file_path: str) -> pd.DataFrame:
     """Loads inference data from a CSV file into a Pandas DataFrame.
 
     Args:
-        file_path: The path to the CSV file.
+        file_path (str):
+            The path to the CSV file.
 
     Returns:
-        pandas.DataFrame: The loaded inference data.
+        inference_df (pd.DataFrame):
+            The loaded inference data.
+            
+    Typical Usage Example: 
+        Load in the inference results which were saved after BVS. When there
+        are multiple BVS model results, this is a useful function to use. Load 
+        in the each of the multiple BVS inference trace data and compare. 
     """
-    inference_df = pd.load_csv(file_path)
+    inference_df = pd.read_csv(file_path)
+    
     return inference_df
 
 
 
 
-def plot_trace(inference_results, var_names=["beta", "beta_raw", "sigma", "ind", "mu"]):
+def plot_trace(
+    inference_results: InferenceData,
+    var_names: list=["beta", "beta_raw", "sigma", "ind", "mu"]
+) -> None:
     """ Plots the trace of the MCMC samples using ArviZ.
 
     Args:
-        inference_results: An ArviZ InferenceData object.
-        var_names (optional): A list of variable names to plot. Defaults to
-                              ["beta", "beta_raw", "sigma", "ind", "mu"].
+        inference_results (InferenceData):
+            An ArviZ InferenceData trace object. Contains the results from the 
+            BVS modeling
+        var_names (list):
+            A list of variable names to plot from the inference trace data.
+            Defaults to ["beta", "beta_raw", "sigma", "ind", "mu"].
 
     Returns:
-        matplotlib.axes.Axes or numpy.ndarray: The axes on which the traceplot was drawn.
-
+        None
+            This function creates a plot and does not return any value.
+        
+    Typical Usage Example: 
+        Plot inference results using specified columns/data types. 
+        matplotlib.axes.Axes or numpy.ndarray:
+        The axes on which the traceplot was drawn.
     """
+    
     az.plot_trace(inference_results, var_names=var_names);
 
     
-def plot_forest(inference_results, var_names=["beta"]):
+def plot_forest(
+    inference_results: InferenceData,
+    var_names: list=["beta"]
+) -> None:
     """ Generates a forest plot of credible intervals for specified variables
-    from an ArviZ InferenceData object.
+    from an ArviZ InferenceData trace object.
 
     Args:
-        inference_results: An ArviZ InferenceData object.
-        var_names (optional): A list of variable names to include in the forest plot.
-                             Defaults to ["beta"].
+        inference_results (InferenceData):
+            An ArviZ InferenceData trace object. Contains the results from the 
+            BVS modeling
+        var_names (list):
+            A list of variable names to plot from the inference trace data.
+            Defaults to ["beta"].
 
     Returns:
+        None
+            This function creates a plot and does not return any value.
+
+    Typical Usage Example:
+        Plot forest data including r hat and hdi probability for the selected 
+        column from the inference trace data in order to assess the quality of the 
+        BVS modeling. 
         matplotlib.axes.Axes or numpy.ndarray: The axes on which the forest plot was drawn.
 
     """
     
-    az.plot_forest(inference_results, var_names=var_names, combined=True, hdi_prob=0.95, r_hat=True);
+    az.plot_forest(
+        inference_results,
+        var_names=var_names,
+        combined=True,
+        hdi_prob=0.95,
+        r_hat=True
+    );
     
     
-def plot_ess(summary_df, variables, states):
+def plot_ess(
+    summary_df: pd.DataFrame,
+    variables: list,
+    states: list
+) -> None:
     """Plots Effective Sample Size (ESS) for bulk and tail of
     specified variables across different covariate values.
 
@@ -83,6 +127,10 @@ def plot_ess(summary_df, variables, states):
         MCMC sampler for each variable and state, helping you identify
         potential issues with model fit or sampling efficiency.      
         
+        summary_df = az.summary(inference_results, round_to=4)
+        inference_variables = lc_predictor_variables.columns  # variables affecting LC rates
+        inference_states = lc_rates.index  # US states
+
         plot_ess(summary_df, inference_variables, inference_states)
     """
 
@@ -118,10 +166,10 @@ def plot_ess(summary_df, variables, states):
             
             
 def plot_importance(
-    importance,
-    x_labels,
-    importance_type
-):
+    importance: list,
+    x_labels: list,
+    importance_type: str
+) -> None:
     """Creates a bar plot to visualize the importance of features.
 
     Args:
@@ -167,42 +215,64 @@ def get_summary(inference_results):
     return summary_df
     
     
-def get_specific_inference_data(summary_df, col_type='mean', col='beta'):
-    """
-    Extracts specific statistics (mean or standard deviation) for specified
-    variables from an ArviZ summary DataFrame.
+def get_specific_inference_data(
+    summary_df: pd.DataFrame,
+    col_type: str='mean',
+    col: str='beta'
+) -> pd.Series:
+    """Extracts specific statistics (mean or standard deviation) for specified
+    variables from an ArviZ summary inference trace DataFrame.
 
     Args:
-        summary_df: A Pandas DataFrame generated by `az.summary()`.
-        col_type (optional): The type of statistic to extract ('mean' or 'sd').
-                           Defaults to 'mean'.
-        col (optional): The prefix of the variable names to select (e.g., 'beta',
-                        'beta_raw', 'mu', 'ind'). Defaults to 'beta'.
+        summary_df (pd.DataFrame):
+            A Pandas DataFrame generated by `az.summary()`. This is the 
+            summary statistics of the BVS trace data. 
+        col_type (optional):
+            The type of statistic to extract ('mean' or 'sd').
+            Defaults to 'mean'.
+        col (optional):
+            The prefix of the variable names to select (e.g., 'beta',
+            'beta_raw', 'mu', 'ind'). Defaults to 'beta'.
 
     Returns:
-        pandas.Series: A Pandas Series containing the selected statistics for the
-                       specified variables.
+        data (pd.Series):
+            A Pandas Series containing the selected statistics for the 
+            specified variables.
+                       
+                       
     """
     new_stat_df = summary_df[col_type]
     
     data = new_stat_df.loc[
-    new_stat_df.index.str.startswith(col)
-]
+        new_stat_df.index.str.startswith(col)
+    ]
+    
     return data
     
 
 
-def extract_inference_results(inference_results):
+def extract_inference_results(
+    inference_results: InferenceData
+) -> :
     """ Extracts posterior, sample statistics, and observed data DataFrames from
-    ArviZ InferenceData.
+    ArviZ InferenceData BVS trace.
 
     Args:
-        inference_results: An ArviZ InferenceData object.
+        inference_results (InferenceData):
+            An ArviZ InferenceData object containing the BVS trace model results.
 
     Returns:
-        tuple: A tuple containing three Pandas DataFrames:
-               (posterior_df, sample_stats_df, observed_data_df).
+        posterior_avg_df (pd.DataFrame):
+            Pandas Dataframe containing the posteriors from the BVS trace inference
+            model results.
+        sample_stats_avg_df (pd.DataFrame):
+            Pandas Dataframe containing the sample statistics from the BVS trace inference
+            model results.
+        observed_data_avg_df (pd.DataFrame):
+            Pandas Dataframe containing the observed data from the BVS trace inference
+            model results.
     """
+    
     posterior_avg_df  = inference_results.to_dataframe()
     sample_stats_avg_df = inference_results.sample_stats.to_dataframe()
     observed_data_avg_df = inference_results.observed_data.to_dataframe()
@@ -211,28 +281,28 @@ def extract_inference_results(inference_results):
 
 
 
-def calculate_importance(ind_means, beta_raw):
-    """
-    *****
-    *****NOT USED!!!*****
-    *****
+# def calculate_importance(ind_means, beta_raw):
+#     """
+#     *****
+#     *****NOT USED!!!*****
+#     *****
     
-    Calculates feature importance by multiplying the mean of the indicator
-    variables (`ind_means`) with the raw beta coefficients (`beta_raw`).
+#     Calculates feature importance by multiplying the mean of the indicator
+#     variables (`ind_means`) with the raw beta coefficients (`beta_raw`).
 
-    Args:
-        ind_means: Pandas Series or array-like containing the mean of the
-                   indicator variables.
-        beta_raw: Pandas Series or array-like containing the raw beta coefficients.
+#     Args:
+#         ind_means: Pandas Series or array-like containing the mean of the
+#                    indicator variables.
+#         beta_raw: Pandas Series or array-like containing the raw beta coefficients.
 
-    Returns:
-        numpy.ndarray: A NumPy array containing the calculated importance values.
+#     Returns:
+#         numpy.ndarray: A NumPy array containing the calculated importance values.
 
-    """
+#     """
     
-    importance = np.multiply(ind_means.values.flatten(), beta_raw.values.flatten())
+#     importance = np.multiply(ind_means.values.flatten(), beta_raw.values.flatten())
     
-    return importance
+#     return importance
 
 
 

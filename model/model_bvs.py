@@ -10,6 +10,7 @@ import pymc as pm
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 import arviz as az
+
 import xarray as xr
 import json
 import pandas as pd
@@ -116,15 +117,26 @@ def bayesian_variable_selection_multiple(
 #     pm.dump(model, f"./model_{experiment_name}.h5")
     
 
-def save_trace(trace, experiment_name):
+def save_trace(
+    trace: az.InferenceData,
+    experiment_name: str
+) -> None:
     """ Saves trace data from BVS experiment
     Args:
-        trace: The PyMC trace object to save.
-        experiment_name: A string representing the name of the experiment.
-                         This will be used to create the directory name.
+        trace (az.InferenceData):
+            The BVS inference model PyMC trace object to save.
+        experiment_name (str):
+            A string representing the name of the experiment.
+            This will be used to create the directory name.
 
     Returns:
         None.
+        
+    Typical Usage Example:
+        # Get the trace (InferenceData object)
+        # Run BVS workflow... Within BVS workflow this function is called
+        # Save the trace to ./trace_my_bvs_experiment
+        save_trace(trace, "my_bvs_experiment")  
 
     """
     pm.save_trace(
@@ -138,28 +150,29 @@ def save_inference_arviz_to_df(
     inferece_results_az:  az.InferenceData,
     target_name: str,
     model_params: dict,
-    # experiment_name: str
 ) -> None:
     """Saves BVS results and model parameters to csv.
         
     Args: 
         inferece_results_az (az.InferenceData):
-            Inference results from BVS.
+            Inference results from BVS modeling.
         
         target_name (str): 
-            The name of the file to save the inference data. 
+            The name of the target variable column. 
             
         model_params (dict): 
             Dictionary of model parameters associated with the 
             inference results.
-    
-        experiment_name (str, optional): 
-            If you want to add a name to the saved file names to help 
-            you more easily identify your experiment, then add it here.
             
     Typical Usage Example: 
         This function is called by the main baysean variable 
         selection funcion. No need to call this separately. 
+        
+        save_inference_arviz_to_df(
+            inferece_results_az=trace,
+            target_name=f"{target_col}",
+            model_params=model_params
+        )
     
     """
     
@@ -222,7 +235,7 @@ def bayesian_variable_selection_with_dfs(
     Series containing Long COVID rates.
 
     Args:
-        df_vars (pandas.DataFrame):
+        df_vars (pd.DataFrame):
             DataFrame containing variables afftecting/not
             affecting Long COVID Rates.
 
@@ -408,14 +421,14 @@ def bayesian_variable_selection_with_dfs(
 
 
 def run_optuna_hyperparameter_optimization(
-    df_variables,
-    df_target,
-    model_params,
-    n_trials=50,
-    sampler_type='QMC',
+    df_variables: pd.DataFrame,
+    df_target: pd.Series,
+    model_params: dict,
+    n_trials: int=100,
+    sampler_type: str='AUTO_SAMPLER',
     # experiment_name="LC_household_pulse_v11_with_race_zscore_norm_optuna",
-    study_name = "LC_hyperparam_optimization_2cores" # Unique id of hyperparameters study.
-):
+    study_name: str="LC_hyperparam_optimization" # Unique id of hyperparameters study.
+) -> dict:
     """ Performs hyperparameter optimization for Bayesian Variable Selection (BVS)
     using Optuna.
 
@@ -425,21 +438,29 @@ def run_optuna_hyperparameter_optimization(
     by minimizing the negative log-likelihood (maximizing the likelihood).
 
     Args:
-        df_variables: Pandas DataFrame containing the independent variables.
-        df_target: Pandas DataFrame or Series containing the target variable.
-        model_params: Dictionary containing initial model parameters for the BVS model.
-                       This dictionary will be updated with the hyperparameters
-                       suggested by Optuna.  It should include starting/stopping values and steps
-                       for the hyperparameters: 'alpha_sigma', 'beta_sigma', 'sigma',
-                       and 'prob_of_success'.
-        n_trials: (Optional) The number of trials to run Optuna. Defaults to 50.
-        sampler_type: (Optional) The type of Optuna sampler to use.  Can be 'QMC',
-                    'TPE', 'GPS', or 'AUTO_SAMPLER'. Defaults to 'QMC'.
-        study_name: (Optional) A unique name for the Optuna study. This is used for storing the
-                    results. Defaults to "LC_hyperparam_optimization_2cores".
+        df_variables (pd.DataFrame):
+            Pandas DataFrame containing the independent predictor variables.
+        df_target (pd.Series):
+            Pandas Series containing the target variable.
+        model_params (dict):
+            Dictionary containing initial model parameters for the BVS model.
+            This dictionary should be updated with the hyperparameters
+            suggested by Optuna.  It should include starting/stopping values and steps
+            for the hyperparameters: 'alpha_sigma', 'beta_sigma', 'sigma',
+            and 'prob_of_success'.
+        n_trials (int, Optional):
+            The number of trials to run Optuna. Defaults to 100.
+        sampler_type:
+            (Optional) The type of Optuna sampler to use.  Can be 'QMC',
+            'TPE', 'GPS', or 'AUTO_SAMPLER'. Defaults to 'AUTO_SAMPLER'.
+        study_name: (Optional)
+            A unique name for the Optuna study. This is used for storing the
+            results. Defaults to "LC_hyperparam_optimization".
 
     Returns:
-        dict: A dictionary containing the best hyperparameters found by Optuna.
+        best_params (dict):
+            A dictionary containing the best hyperparameters found by Optuna
+            hyperparameter optimization trials.
     """
     
     def objective(trial):
@@ -484,7 +505,8 @@ def run_optuna_hyperparameter_optimization(
 
         """
         # Define hyperparameters using trial.suggest_* methods
-
+        # Hyperparameter search space
+        # min, max, step for alpha sigma
         alpha_sigma = trial.suggest_float(
             'alpha_sigma',
             model_params['alpha_sigma_start'],
@@ -492,7 +514,8 @@ def run_optuna_hyperparameter_optimization(
             step=model_params['alpha_sigma_step'],
         )
 
-        
+        # Hyperparameter search space
+        # min, max, step for beta sigma
         beta_sigma = trial.suggest_float(
             'beta_sigma',
             model_params['beta_sigma_start'],
@@ -501,6 +524,8 @@ def run_optuna_hyperparameter_optimization(
         )
         
         
+        # Hyperparameter search space
+        # min, max, step for sigma
         sigma = trial.suggest_float(
             'sigma',
             model_params['sigma_start'],
@@ -508,6 +533,8 @@ def run_optuna_hyperparameter_optimization(
             step=model_params['sigma_step'],
         )
         
+        # Hyperparameter search space
+        # min, max, step for prob_of_success
         prob_of_success = trial.suggest_float(
             'prob_of_success',
             model_params['prob_of_success_start'],
@@ -521,6 +548,7 @@ def run_optuna_hyperparameter_optimization(
         model_params['sigma'] = sigma
         model_params['prob_of_success'] = prob_of_success
 
+        # Run BVS
         trace = bayesian_variable_selection_with_dfs(
             df_variables,  # dataframe containing variables
             df_target,  # series containing Long COVID rates
@@ -528,18 +556,22 @@ def run_optuna_hyperparameter_optimization(
             model_params # model parameters for BVS
         )
         
+        # Inference data, calculate log likelihood
         idata = pm.to_inference_data(trace, log_likelihood=True)
         
+        # Extract log likelihood
         log_likelihood = idata.log_likelihood.likelihood.values
         
+        # Get the mean log likelihood
         mean_log_likelihood = np.mean(log_likelihood)
         # print(mean_log_likelihood)
         
+        # Save log likelihood in trial information
         trial.set_user_attr("mean_log_likelihood", mean_log_likelihood)
         
+        # Return mean log likelihood as objective function
         return mean_log_likelihood
 
-    
     # Add stream handler of stdout to show the messages
     optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
     
@@ -559,33 +591,34 @@ def run_optuna_hyperparameter_optimization(
     
     elif sampler_type == 'GPS':
         sampler = optuna.samplers.GPSampler()
-        
     
     # Create optuna hyperparameters study
     study = optuna.create_study(
         direction='minimize',  # Optimize objective function
         storage=storage_name,  # Store results in local DB
-        sampler=sampler,
+        sampler=sampler,  # Specify which sampling method to use
         load_if_exists=True  # Resume hyperparameter study if exists
     )
     
     # Optimize hyperparameters (sensitivity analysis)
     study.optimize(
-        objective,
-        n_trials=n_trials,
-        gc_after_trial=True,
-        show_progress_bar=True
+        objective,  # log likelihood
+        n_trials=n_trials,  # Number of iterations to run through
+        gc_after_trial=True,  # Garbage collection for memory cleanup
+        show_progress_bar=True  # UI progress bar for UX
     )
-    
     
     # Get current date so that we can keep track of when
     # the hyperparameter optimization was run
     now = datetime.datetime.now()
     formatted_date = now.strftime('%m-%d-%Y_%H-%M-%S')
     
+    # Define the full optuna trial name, including the given study
+    # name, sampler type, and date time it was run. This is for
+    # ease of documentation purposes
     df_optuna_name = f'Optuna-param-optimization_{study_name}_sampler-{sampler_type}_{formatted_date}.csv'
     
-    # df_optuna = study.trials_dataframe(attrs=("number", "value", "params", "state")) 
+    # Optuna dataframe values
     df_optuna = study.trials_dataframe(
         attrs=(
             'number',
@@ -599,7 +632,8 @@ def run_optuna_hyperparameter_optimization(
             'system_attrs'
         )
     )
-        
+    
+    # Save optuna information
     df_optuna.to_csv(df_optuna_name, index=False) 
 
     # Save the sampler with pickle to be loaded later.

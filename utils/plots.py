@@ -9,6 +9,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
 import statsmodels.api as sm
 
+
 def create_qq_plot(
     data: pd.Series
 ) -> None:
@@ -162,19 +163,60 @@ def dendrogram(data: pd.DataFrame) -> None:
 
     
     
-def plot_hist(df):
+def plot_hist(df: pd.DataFrame) -> None:
+    """Plots histograms for all columns in a Pandas DataFrame.
+
+    Args:
+        df (pd.DataFrame):
+            The Pandas DataFrame to plot.
+
+    Returns:
+        None
+
+    Typical Usage Example:
+        plot_hist(my_dataframe)
+    """
     for var in df.columns: 
         plt.hist(df[[var]])
         plt.title(var)
-        plt.show()
+        plt.xlabel("Value")  # Add x-axis label for clarity
+        plt.ylabel("Frequency")  # Add y-axis label
+        plt.tight_layout() # Adjust layout to prevent labels from overlapping
+        plt.show()        
         
+def plot_scatter(
+    df_variables: pd.DataFrame,
+    df_target: pd.DataFrame,
+    col_target: str = "Avg"
+) -> None:
+    """Plots scatter plots of independent predictor variables
+    against a target variable.
+
+    Args:
+        df_variables (pd.DataFrame):
+            Pandas DataFrame of independent predictor variables.
+        df_target (pd.DataFrame):
+            Pandas DataFrame containing the target variable.
+        col_target (str):
+            The name of the target variable column. Defaults to "Avg".
+
+    Returns:
+        None
+
+    Typical Usage Example:
+        Use this to see if there are any visible correlations between
+        predictor variables and LC rates.
         
-def plot_scatter(df_variables, df_target, col_target="Avg"):
+        plot_scatter(predictor_vars_df, LC_rates, "Avg_LC_Rate")
+        
+    """    
     for var in df_variables.columns: 
         plt.scatter(df_target[[col_target]], df_variables[[var]])
-        plt.title(var)
-        plt.show()
-        
+        plt.title(f"{var} vs. {col_target}")  # More descriptive title
+        plt.xlabel(col_target)  # Add x-axis label
+        plt.ylabel(var)  # Add y-axis label
+        plt.tight_layout() # Adjust layout to prevent labels from overlapping
+        plt.show()        
         
 def plot_correlation_matrix(
     df: pd.DataFrame,
@@ -186,23 +228,39 @@ def plot_correlation_matrix(
     save_image: bool = False,
     image_path: str = None
 ) -> None:
-    '''
-    Plots a correlation matrix as a heatmap with seaborn and optionally saves the figure as an image.
+    ''' Plots a correlation matrix as a heatmap with seaborn
+    and optionally saves the figure as an image.
 
     Args:
-        df: The pandas DataFrame containing the data.
-        method: Method of correlation between variables
+        df (pd.DataFrame):
+            The pandas DataFrame containing the data.
+        method (str):
+            Method of correlation between variables
             {‘pearson’, ‘kendall’, ‘spearman’} or callable
             pearson : standard correlation coefficient
             kendall : Kendall Tau correlation coefficient
             spearman : Spearman rank correlation
-        save_image: A boolean flag to indicate if the plot should be saved as an image (default: False).
-        plot_title: The title of the plot (default: 'Correlation Matrix').
-        corr_label_size: The font size for correlation values (default: 4).
-        axis_label_size: The font size for axis labels (default: 4).
-        figsize: A tuple specifying the width and height of the figure in inches (default: (10, 8)).
-        save_image: A boolean flag to indicate if the plot should be saved as an image (default: False).
-        image_path: The file path to save the image (default: 'correlation_matrix.png').
+        save_image (bool):
+            A boolean flag to indicate if the plot should be
+            saved as an image (default: False).
+        plot_title (str):
+            The title of the plot (default: 'Correlation Matrix').
+        corr_label_size (int):
+            The font size for correlation values (default: 4).
+        axis_label_size (int):
+            The font size for axis labels (default: 4).
+        figsize (tuple):
+            A tuple specifying the width and height of the figure in
+            inches (default: (10, 8)).
+        save_image (bool):
+            A boolean flag to indicate if the plot should be saved as
+            an image (default: False).
+        image_path (str):
+            The file path to save the image (default: 'correlation_matrix.png').
+            
+    Typical Usage Example: 
+        Understand the correlation between all predictor variables to 
+        see if there is visible multicollinearity. 
     '''
     
     # Calculate the correlation matrix
@@ -239,7 +297,8 @@ def plot_correlation_matrix(
         # ha='left'
     )
     
-    ax.tick_params(axis='both', labelsize=axis_label_size)  # Set font size for both x and y ticks
+    # Set font size for both x and y ticks
+    ax.tick_params(axis='both', labelsize=axis_label_size)  
 
     plt.tight_layout()
     
@@ -252,15 +311,17 @@ def plot_correlation_matrix(
     
 
 def plot_p_values(df_results, alpha=0.05):
-    """
-    Generates a grouped bar plot of corrected p-values (Pearson, Spearman, Kendall)
-    for each variable, with an optional horizontal line indicating the alpha level.
+    """ Generates a grouped bar plot of corrected p-values
+    (Pearson, Spearman, Kendall) for each variable, with a
+    horizontal line indicating the alpha level.
 
     Args:
-        df_results: Pandas DataFrame containing the results of correlation tests,
-                    including p-values for Pearson, Spearman, and Kendall.
-        alpha: (Optional) Significance level. If provided, a horizontal line will be
-               drawn at this value. Defaults to 0.05.
+        df_results:
+            Pandas DataFrame containing the results of correlation tests,
+            including p-values for Pearson, Spearman, and Kendall.
+        alpha (float):
+            Significance level. A horizontal line will be drawn at
+            this value. Defaults to 0.05.
 
     Returns:
         None (displays the plot).
