@@ -8,6 +8,8 @@ import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
 import statsmodels.api as sm
+from matplotlib.ticker import MultipleLocator  # Import MultipleLocator
+from matplotlib.colors import LinearSegmentedColormap
 
 
 def create_qq_plot(
@@ -488,3 +490,203 @@ def plots_null_hypothesis(
         plt.show()
 
 
+
+def clean_feature_name(name: str) -> str:
+    """Cleans a feature name.
+    args:
+        name(str):
+            name of the feature to clean up for readability
+    """
+    name = re.sub(r'[^a-zA-Z0-9_]+', ' ', name).strip()  # Replace non-alphanumeric with spaces
+    name = name.replace(' ', '_')  # Replace spaces with underscores
+    
+    return name
+
+
+def plot_importance_with_errors(
+    df: pd.DataFrame,
+    title: str="Feature Importance"
+) -> None:
+    """Plots feature importance with error bars, sorted by importance.
+
+    Args:
+        df (pd.DataFrame):
+            Dataframe with 'Importance' and 'SEM' columns.
+            The index of the DataFrame should be the feature names.
+        title (str):
+            Plot title.
+    """
+
+    df_results = pd.DataFrame(
+        {'Importance': beta_means_results['mean'],
+         'SEM': beta_means_results['mcse_mean']},
+        index=beta_means_results.index
+    )    
+    
+    # 1. Clean Feature Names FIRST
+    df_results.index = df_results.index.map(clean_feature_name) #Clean the index
+
+    # 2. Sort by Importance
+    df_sorted = df_results.sort_values('Importance', ascending=False)
+
+    # 3. Reset the index
+    df_plot = df_sorted.reset_index().rename(columns={'index': 'Feature'})
+
+    # 4. Convert 'Feature' to categorical
+    df_plot['Feature'] = df_plot['Feature'].astype('category')
+
+    # 5. Convert 'Importance' to numeric (just in case)
+    df_plot['Importance'] = pd.to_numeric(df_plot['Importance'])
+
+    # ***Explicitly set the order for barplot***
+    feature_order = df_sorted.index.tolist() # Get the list of the sorted features
+
+    # Create a custom colormap (red to blue)
+    cmap = LinearSegmentedColormap.from_list("my_cmap", ["cyan", "orange"])
+
+    # Normalize importance values for the colormap
+    norm = plt.Normalize(df_plot['Importance'].min(), df_plot['Importance'].max())
+
+    
+    plt.figure(figsize=(8, 8))
+    sns.set_style("whitegrid")
+
+    ax = sns.barplot(
+        x='Importance',  # Importance is now on the x-axis
+        y='Feature',  # Features are now on the y-axis
+        data=df_plot,
+        xerr=df_plot['SEM'],  # Error bars are horizontal
+        capsize=0,
+        order=feature_order,
+        palette=cmap(norm(df_plot['Importance'])),  # Apply colormap
+    )
+    
+    for i, row in df_plot.iterrows():
+        importance = row['Importance']
+        sem = row['SEM']
+        ax.errorbar(
+            x=importance,  # Center of the error bar
+            y=i ,  # Vertical position of the error bar (adjust 0.4 for centering)
+            xerr=sem,  # Error bar length (SEM)
+            fmt='none',  # Don't plot the data point itself
+            ecolor='black',  # Error bar color
+            capsize=5,  # Size of the caps (adjust as needed)
+            elinewidth=1 # error line width
+        )
+    
+    ax.grid(axis='x', linestyle='--', alpha=0.7)  # Vertical gridlines (x-axis)
+    ax.grid(axis='y', linestyle='--', alpha=0.7)  # Horizontal gridlines (y-axis)
+
+
+    ax.xaxis.set_major_locator(MultipleLocator(0.025))  # Set ticks at multiples of 0.5
+    ax.xaxis.set_minor_locator(MultipleLocator(0.05))  # Set ticks at multiples of 0.5
+
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
+    plt.ylabel("Features")
+    plt.xlabel("Importance")
+    plt.title(title)
+    plt.tight_layout()
+    plt.show()
+    
+    
+    
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def plot_p_values(df_results, alpha=0.05):
+    """
+    Generates a grouped bar plot of corrected p-values (Pearson, Spearman, Kendall)
+    for each variable, with an optional horizontal line indicating the alpha level.
+
+    Args:
+        df_results: Pandas DataFrame containing the results of correlation tests,
+                    including p-values for Pearson, Spearman, and Kendall.
+        alpha: (Optional) Significance level. If provided, a horizontal line will be
+               drawn at this value. Defaults to 0.05.
+
+    Returns:
+        None (displays the plot).
+
+    """
+    
+    variables = df_results['Variable']
+    p_value_pearson = df_results['Pearson_p_value'].astype(float) #Convert to float.
+    p_value_spearman = df_results['Spearman_p_value'].astype(float) #Convert to float.
+    p_value_kendall = df_results['Kendall_p_value'].astype(float) #Convert to float.
+
+    width = 0.2  # Width of each bar
+
+    x = range(len(variables))  # X-axis positions for the bars
+
+    plt.figure(figsize=(12, 6))  # Adjust figure size as needed
+
+    plt.bar([i - width for i in x], p_value_pearson, width, label='Pearson p-value')
+    plt.bar(x, p_value_spearman, width, label='Spearman p-value')
+    plt.bar([i + width for i in x], p_value_kendall, width, label='Kendall p-value')
+
+    plt.xticks(x, variables, rotation=45, ha='right')  # Set x-axis labels and rotate
+    plt.ylabel("P-value")
+    plt.title("NULL Hypothesis: P-values")
+    plt.legend()
+    plt.tight_layout()
+    plt.grid(axis='y', alpha=0.5)  # Add a subtle grid
+    
+    if alpha is not None:  # Add horizontal line if alpha is provided
+        plt.axhline(y=alpha, color='r', linestyle='--', label=f"Alpha = {alpha}")
+        plt.legend()  # Update the legend to include the alpha line
+
+    plt.show()
+    
+    
+def plot_p_values_false_discovery_corrected(
+    df_results: pd.DataFrame,
+    alpha: float=0.05,
+    fdr_type: str="fdr_bh"
+) -> None:
+    """
+    Generates a grouped bar plot of corrected p-values (Pearson, Spearman, Kendall)
+    for each variable, with an optional horizontal line indicating the alpha level.
+
+    Args:
+        df_results (pd.DataFrame):
+            Pandas DataFrame containing the results of correlation tests,
+            including corrected p-values for Pearson, Spearman, and Kendall.
+        alpha (float):
+            (Optional) Significance level. If provided, a horizontal line will be
+             drawn at this value. Defaults to 0.05.
+        fdr_type (str):
+            False Discovery Rate correction calculation type.
+            Default fdr_bh
+            
+    Returns:
+        None (displays the plot).
+
+    """
+    
+    variables = df_results['Variable']
+    p_value_pearson = df_results[f'Pearson_p_value_corrected_{fdr_type}'].astype(float) #Convert to float.
+    p_value_spearman = df_results[f'Spearman_p_value_corrected_{fdr_type}'].astype(float) #Convert to float.
+    p_value_kendall = df_results[f'Kendall_p_value_corrected_{fdr_type}'].astype(float) #Convert to float.
+
+    width = 0.2  # Width of each bar
+
+    x = range(len(variables))  # X-axis positions for the bars
+
+    plt.figure(figsize=(12, 6))  # Adjust figure size as needed
+
+    plt.bar([i - width for i in x], p_value_pearson, width, label='Pearson p-value corrected')
+    plt.bar(x, p_value_spearman, width, label='Spearman p-value corrected')
+    plt.bar([i + width for i in x], p_value_kendall, width, label='Kendall p-value corrected')
+
+    plt.xticks(x, variables, rotation=45, ha='right')  # Set x-axis labels and rotate
+    plt.ylabel("P-value False Discovery Rate corrected")
+    plt.title("NULL Hypothesis: P-values False Discovery Rate corrected")
+    plt.legend()
+    plt.tight_layout()
+    plt.grid(axis='y', alpha=0.5)  # Add a subtle grid
+    
+    if alpha is not None:  # Add horizontal line if alpha is provided
+        plt.axhline(y=alpha, color='r', linestyle='--', label=f"Alpha = {alpha}")
+        plt.legend()  # Update the legend to include the alpha line
+
+    plt.show()

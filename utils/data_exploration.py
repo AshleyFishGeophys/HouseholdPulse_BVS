@@ -205,3 +205,167 @@ def evaluate_and_compare_models(
             )
 
     return results_df
+
+
+
+
+import pandas as pd
+import scipy.stats as stats
+from statsmodels.stats.multitest import multipletests 
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+
+
+def evaluate_and_compare_models(
+    df_vars: pd.DataFrame,
+    target: pd.Series,
+    fdr_type: str="fdr_bh"
+) -> pd.DataFrame:
+    """
+    Calculates Pearson, Spearman, and Kendall correlations and performs FDR correction.
+
+    Args:
+        df_vars (pd.DataFrame):
+            Pandas DataFrame of independent variables.
+        target (pd.Series):
+            Pandas Series of the dependent variable.
+        fdr_type (str):
+            False Discovery Rate correction calculation type.
+            Default fdr_bh
+
+    Returns:
+        results_df (pd.DataFrame):
+            A Pandas DataFrame with correlations and corrected p-values.
+            Returns an empty DataFrame if no numeric columns are found.
+        
+    Typical Usage Example: 
+        Calculate False Discovery Rate. Proceedure from statsmodels multitest:
+        https://www.statsmodels.org/dev/generated/statsmodels.stats.multitest.multipletests.html
+        https://islp.readthedocs.io/en/latest/labs/Ch13-multiple-lab.html#false-discovery-rate
+        It uses the Benjamini–Hochberg procedure.
+        
+        Choosing between fdr_bh, fdr_by, fdr_tsbh, and fdr_tsbky depends primarily on your
+        assumptions about the dependence structure of your p-values (i.e., whether the tests
+        are independent, positively correlated, or negatively correlated) and how conservative
+        you need to be.
+
+        Here's a breakdown:
+
+        fdr_bh (Benjamini-Hochberg):
+            -Assumptions:
+                Assumes that the tests are either independent or positively correlated.
+                It is the most commonly used FDR correction.
+            -Pros:
+                Less conservative than FWER controlling methods (like Bonferroni), meaning it
+                will generally lead to more rejections (more "discoveries"). Good balance between
+                controlling the FDR and statistical power.
+            -Cons:
+                Can be less reliable if your tests are negatively correlated, although it's still often
+                used even if the correlation structure is unknown.
+        
+        fdr_by (Benjamini-Yekutieli):
+            -Assumptions:
+                Makes no assumptions about the dependence structure of the p-values. It is valid
+                even under arbitrary dependence.
+            Pros:
+                More conservative than fdr_bh, meaning it controls the FDR even when tests are negatively
+                correlated or their dependence structure is unknown.
+            Cons:
+                More conservative, so it will lead to fewer rejections (fewer "discoveries") compared to
+                fdr_bh. You might miss some true effects.
+        
+        fdr_tsbh (Two-stage Benjamini-Hochberg):
+            -Assumptions:
+                Similar to fdr_bh, assumes independent or positively correlated tests.
+            -Pros:
+                Aims to improve the power of the original fdr_bh procedure by using a two-stage
+                approach. It tries to estimate the proportion of true null hypotheses more accurately.
+                Generally more powerful than fdr_bh.
+            -Cons:
+                More computationally intensive than fdr_bh.
+        
+        fdr_tsbky (Two-stage Benjamini-Yekutieli):
+            -Assumptions:
+                Like fdr_by, makes no assumptions about the dependence structure.
+            -Pros: 
+                Combines the robustness of fdr_by with the potential power gains of a two-stage procedure.
+                Controls FDR even under arbitrary dependence and can be more powerful than fdr_by.
+            -Cons:
+                The most computationally intensive of the four.
+
+    """
+
+    X = df_vars.values
+    numeric_vars = df_vars.select_dtypes(include='number')
+
+    if numeric_vars.empty:  # Check if numeric_vars is empty
+        return pd.DataFrame()  # Return an empty DataFrame
+
+    # Scale data (z-score scaling)
+    X_scaled = X.copy()
+    non_binary_columns = [col for col in df_vars.columns if len(df_vars[col].unique()) > 2]
+    columns_to_scale = [df_vars.columns.get_loc(col) for col in non_binary_columns]
+    scaler = StandardScaler()
+    X_scaled[:, columns_to_scale] = scaler.fit_transform(X[:, columns_to_scale])
+
+    # Impute missing values
+    imputer = SimpleImputer(strategy='mean')
+    X_imputed = imputer.fit_transform(X_scaled)
+
+    results_list = []
+    num_tests = X_imputed.shape[1]
+
+    p_values_pearson = []
+    p_values_spearman = []
+    p_values_kendall = []
+
+    for i in range(X_imputed.shape[1]):
+        var_name = numeric_vars.columns[i]
+        variable_data = X_imputed[:, i]
+        var_results = {}
+        var_results['Variable'] = var_name
+
+        try:
+            pearson_result = stats.pearsonr(variable_data, target)
+            spearman_result = stats.spearmanr(variable_data, target)
+            kendall_result = stats.kendalltau(variable_data, target)
+
+            var_results['Pearson_p_value'] = pearson_result[1]
+            var_results['Spearman_p_value'] = spearman_result[1]
+            var_results['Kendall_p_value'] = kendall_result[1]
+
+            var_results['Pearson_Correlation'] = pearson_result[0]
+            var_results['Spearman_Correlation'] = spearman_result[0]
+            var_results['Kendall_Tau'] = kendall_result[0]
+
+            p_values_pearson.append(pearson_result[1])
+            p_values_spearman.append(spearman_result[1])
+            p_values_kendall.append(kendall_result[1])
+
+            results_list.append(var_results)
+
+        except Exception as e:
+            print(f"Error calculating correlation for {var_name}: {e}")
+            results_list.append({'Variable': var_name, 'Error': str(e)})
+
+    results_df = pd.DataFrame(results_list)
+
+    # False Detection Rate correction
+    reject_pearson, pvals_corrected_pearson, _, _ = multipletests(p_values_pearson, method=fdr_type, is_sorted=False)
+    reject_spearman, pvals_corrected_spearman, _, _ = multipletests(p_values_spearman, method=fdr_type, is_sorted=False)
+    reject_kendall, pvals_corrected_kendall, _, _ = multipletests(p_values_kendall, method=fdr_type, is_sorted=False)
+
+    results_df[f'Pearson_p_value_corrected_{fdr_type}'] = pvals_corrected_pearson
+    results_df[f'Spearman_p_value_corrected_{fdr_type}'] = pvals_corrected_spearman
+    results_df[f'Kendall_p_value_corrected_{fdr_type}'] = pvals_corrected_kendall
+    
+    results_df[f'reject_pearson_{fdr_type}'] = reject_pearson
+    results_df[f'reject_spearman_{fdr_type}'] = reject_spearman
+    results_df[f'reject_kendall_{fdr_type}'] = reject_kendall    
+
+    # Decimal formatting (only for numeric columns)
+    for col in results_df.columns:
+        if pd.api.types.is_numeric_dtype(results_df[col]):
+            results_df[col] = results_df[col].apply(lambda x: f"{x:.6f}" if isinstance(x, float) else x)
+
+    return results_df
