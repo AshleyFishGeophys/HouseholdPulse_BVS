@@ -209,7 +209,7 @@ def plot_scatter(
         Use this to see if there are any visible correlations between
         predictor variables and LC rates.
         
-        plot_scatter(predictor_vars_df, LC_rates, "Avg_LC_Rate")
+        plot_scatter(predictor_vars_df, LC_rates_df, col_target="Avg")
         
     """    
     for var in df_variables.columns: 
@@ -590,103 +590,38 @@ def plot_importance_with_errors(
     
     
     
-import pandas as pd
-import matplotlib.pyplot as plt
-
-def plot_p_values(df_results, alpha=0.05):
-    """
-    Generates a grouped bar plot of corrected p-values (Pearson, Spearman, Kendall)
-    for each variable, with an optional horizontal line indicating the alpha level.
-
-    Args:
-        df_results: Pandas DataFrame containing the results of correlation tests,
-                    including p-values for Pearson, Spearman, and Kendall.
-        alpha: (Optional) Significance level. If provided, a horizontal line will be
-               drawn at this value. Defaults to 0.05.
-
-    Returns:
-        None (displays the plot).
-
-    """
-    
-    variables = df_results['Variable']
-    p_value_pearson = df_results['Pearson_p_value'].astype(float) #Convert to float.
-    p_value_spearman = df_results['Spearman_p_value'].astype(float) #Convert to float.
-    p_value_kendall = df_results['Kendall_p_value'].astype(float) #Convert to float.
-
-    width = 0.2  # Width of each bar
-
-    x = range(len(variables))  # X-axis positions for the bars
-
-    plt.figure(figsize=(12, 6))  # Adjust figure size as needed
-
-    plt.bar([i - width for i in x], p_value_pearson, width, label='Pearson p-value')
-    plt.bar(x, p_value_spearman, width, label='Spearman p-value')
-    plt.bar([i + width for i in x], p_value_kendall, width, label='Kendall p-value')
-
-    plt.xticks(x, variables, rotation=45, ha='right')  # Set x-axis labels and rotate
-    plt.ylabel("P-value")
-    plt.title("NULL Hypothesis: P-values")
-    plt.legend()
-    plt.tight_layout()
-    plt.grid(axis='y', alpha=0.5)  # Add a subtle grid
-    
-    if alpha is not None:  # Add horizontal line if alpha is provided
-        plt.axhline(y=alpha, color='r', linestyle='--', label=f"Alpha = {alpha}")
-        plt.legend()  # Update the legend to include the alpha line
-
-    plt.show()
-    
-    
-def plot_p_values_false_discovery_corrected(
-    df_results: pd.DataFrame,
-    alpha: float=0.05,
-    fdr_type: str="fdr_bh"
-) -> None:
-    """
-    Generates a grouped bar plot of corrected p-values (Pearson, Spearman, Kendall)
-    for each variable, with an optional horizontal line indicating the alpha level.
+def plot_importance(
+    importance,
+    x_labels,
+    importance_type
+):
+    """Creates a bar plot to visualize the importance of features.
 
     Args:
-        df_results (pd.DataFrame):
-            Pandas DataFrame containing the results of correlation tests,
-            including corrected p-values for Pearson, Spearman, and Kendall.
-        alpha (float):
-            (Optional) Significance level. If provided, a horizontal line will be
-             drawn at this value. Defaults to 0.05.
-        fdr_type (str):
-            False Discovery Rate correction calculation type.
-            Default fdr_bh
-            
+        importance (list):
+            A list containing the importance scores for each feature.
+
+        x_labels (list):
+            A list of corresponding labels for the features.
+
+        importance_type (str):
+            A string describing the type of importance (e.g., gain, weight, etc.).
+
     Returns:
-        None (displays the plot).
-
-    """
+        None:
+            This function creates a plot and does not return any value.
+          
+    Typical Usage Example: 
+        This code will generate a bar chart representing the importance
+        scores for each feature. The x-axis will display the feature labels
+        rotated for readability, and the y-axis will represent the importance score.
     
-    variables = df_results['Variable']
-    p_value_pearson = df_results[f'Pearson_p_value_corrected_{fdr_type}'].astype(float) #Convert to float.
-    p_value_spearman = df_results[f'Spearman_p_value_corrected_{fdr_type}'].astype(float) #Convert to float.
-    p_value_kendall = df_results[f'Kendall_p_value_corrected_{fdr_type}'].astype(float) #Convert to float.
-
-    width = 0.2  # Width of each bar
-
-    x = range(len(variables))  # X-axis positions for the bars
-
-    plt.figure(figsize=(12, 6))  # Adjust figure size as needed
-
-    plt.bar([i - width for i in x], p_value_pearson, width, label='Pearson p-value corrected')
-    plt.bar(x, p_value_spearman, width, label='Spearman p-value corrected')
-    plt.bar([i + width for i in x], p_value_kendall, width, label='Kendall p-value corrected')
-
-    plt.xticks(x, variables, rotation=45, ha='right')  # Set x-axis labels and rotate
-    plt.ylabel("P-value False Discovery Rate corrected")
-    plt.title("NULL Hypothesis: P-values False Discovery Rate corrected")
-    plt.legend()
-    plt.tight_layout()
-    plt.grid(axis='y', alpha=0.5)  # Add a subtle grid
+        plot_importance(normalized_importance_1, x_labels, importance_type="Importance: Beta & Ind")
     
-    if alpha is not None:  # Add horizontal line if alpha is provided
-        plt.axhline(y=alpha, color='r', linestyle='--', label=f"Alpha = {alpha}")
-        plt.legend()  # Update the legend to include the alpha line
-
+    """   
+    plt.plot(importance, 'o')
+    plt.suptitle(f"{importance_type}")
+    plt.xlabel(x_labels)
+    plt.xticks(range(len(importance)), x_labels, rotation=90)
     plt.show()
+    

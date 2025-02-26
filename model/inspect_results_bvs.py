@@ -2,6 +2,9 @@ import pymc as pm
 import arviz as az
 import xarray as xr
 import pandas as pd
+import numpy as np
+import re
+
 import sqlite3
 import statsmodels.api as sm
 import scipy.stats as stats
@@ -253,7 +256,7 @@ def get_specific_inference_data(
 
 def extract_inference_results(
     inference_results: InferenceData
-) -> :
+):
     """ Extracts posterior, sample statistics, and observed data DataFrames from
     ArviZ InferenceData BVS trace.
 
@@ -306,3 +309,106 @@ def extract_inference_results(
 
 
 
+
+
+def restructure_mcmc_samples_custom(csv_file, output_file="restructured_posterior_samples.csv"):       
+    try:
+        df = pd.read_csv(csv_file, header=None, engine='python')
+
+        header = df.iloc[0].tolist()  # Get header as a list of strings
+        # print(header)
+        df = df.iloc[1:]  # Remove the header row
+
+        data = []
+        for index, row in df.iterrows():
+            chain = row[0]  # Chain is the first column
+            draw = row[1]   # Draw is the second column
+            for j in range(2, len(header)):  # Iterate over data columns
+                col_name = header[j]
+
+                match = re.search(r"\('(.+?)', '(.+?)'[,)]", col_name) # Improved regex
+
+                if match:
+                    group = match.group(1)
+                    variable = match.group(2)
+                    index_match = re.search(r"\[(\d+)\]", variable) # check for index in variable
+                    if index_match:
+                        index = index_match.group(1)
+                        variable = variable.split('[')[0] + f"[{index}]"
+                    value = row[j]
+                    data.append({'chain': chain, 'draw': draw, 'variable': variable, 'value': value})
+                elif "sample_stats" in col_name or "log_likelihood" in col_name: # single variable case
+                    parts = col_name.split("('")
+                    group = parts[1].split("'")[0]
+                    variable = parts[1].split("'")[1]
+                    value = row[j]
+                    data.append({'chain': chain, 'draw': draw, 'variable': variable, 'value': value})
+                else:
+                    print(f"Skipping column {col_name} due to parsing issues.")
+
+
+        long_df = pd.DataFrame(data)
+        long_df['variable'] = long_df['variable'].astype(str)
+        long_df.to_csv(output_file, index=False)
+        print(f"Restructured data saved to {output_file}")
+
+    except FileNotFoundError:
+        print(f"Error: CSV file '{csv_file}' not found.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        
+        
+        
+def analyze_posterior_from_csv(csv_file, variable_pattern):  # variable_pattern is now a regex pattern
+    try:
+        df = pd.read_csv(csv_file)
+
+        print(df.columns)
+        
+        # Select ALL columns that MATCH the variable_pattern (using regex)
+        df_target = df[df['variable'].str.contains(variable_pattern, na=False)]  # na=False handles potential NaNs
+
+        
+        n_chains = df_target['chain'].nunique()
+        n_draws = df_target['draw'].nunique()
+        variables = df_target['variable'].unique()
+        print(variables)
+
+        posterior_data = {}
+
+        for variable in variables:
+            values = np.empty((n_chains, n_draws))
+
+            for chain in range(n_chains):
+                for draw in range(n_draws):
+                    try:
+                        val = df_target[(df_target['chain'] == chain) & (df_target['draw'] == draw) & (df_target['variable'] == variable)]['value'].iloc[0]
+                        values[chain, draw] = val
+                    except KeyError:
+                        print(f"Warning: Missing data for variable: {variable}, chain: {chain}, draw: {draw}")
+                        values[chain, draw] = np.nan
+                    except Exception as e:
+                        print(f"Error for variable: {variable}, chain: {chain}, draw: {draw}: {e}")
+                        return None, None, None
+
+            posterior_data[variable] = (("chain", "draw"), values)
+
+        coords = {"chain": range(n_chains), "draw": range(n_draws)}
+        posterior_ds = xr.Dataset(posterior_data, coords=coords)
+
+        inference_data = az.InferenceData(posterior=posterior_ds)
+
+        hdi_data = az.hdi(inference_data, hdi_prob=0.95)
+        rhat_data = az.rhat(inference_data)
+
+        return inference_data, hdi_data, rhat_data
+
+    except FileNotFoundError:
+        print(f"Error: CSV file '{csv_file}' not found.")
+        return None, None, None
+    except ValueError as e:
+        print(f"Error: {e}")
+        return None, None, None
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None, None, None
