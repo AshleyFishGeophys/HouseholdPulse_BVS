@@ -1,8 +1,0 @@
-{
-    "alpha_sigma": 2,
-    "beta_sigma": 0.5,
-    "mu": 0,
-    "sigma": 2,
-    "prob_of_success": 0.2,
-    "draws": 2000,
-    "kernel": 

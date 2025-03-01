@@ -413,30 +413,6 @@ def get_variables_df(
     
     
     
-def check_df_for_nan_inf_zero(df: pd.DataFrame) -> None:
-    """Checks a Pandas DataFrame for NaN, infinite, and zero values.
-
-    Args:
-        df (pd.DataFrame): The input Pandas DataFrame.
-
-    Returns: 
-        None
-
-    Typical Usage Example:
-        has_nan, has_inf, has_zero = check_df_for_nan_inf_zero(my_dataframe)
-        if has_nan:
-            print("DataFrame contains NaN values.")
-        if has_inf:
-            print("DataFrame contains infinite values.")
-        if has_zero:
-            print("DataFrame contains zero values.")
-
-    """    
-    print(f"Is NaN: {np.isnan(df).any()}")  # Checks for NaNs
-    print(f"Is INF: {np.isinf(df).any()}")  # Checks for infinities
-    print(f"Is Zero: {(df.values == 0).any()}") # Check for zeros 
-
-    
 def calc_variable_correlations(
     df: pd.DataFrame,
     method: str = "pearson"

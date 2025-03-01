@@ -9,6 +9,33 @@ from statsmodels.stats.multitest import multipletests
 from typing import Optional
 
 
+def check_df_for_nan_null_inf_zero(df: pd.DataFrame) -> None:
+    """Checks a Pandas DataFrame for NaN, infinite, and zero values.
+
+    Args:
+        df (pd.DataFrame): The input Pandas DataFrame.
+
+    Returns: 
+        None
+
+    Typical Usage Example:
+        check_df_for_nan_inf_zero(my_dataframe)
+        
+        For each column in the dataframe, it'll check and see if
+        there exist any NaN, NULL, INF, or Zero values, and 
+        then say if the condition is true or not.
+    """    
+    
+    print("Is NaN:") 
+    print(np.isnan(df).any())  # Checks for NaNs
+    print("Is Null:")
+    print(df.isnull().any())  # Checks for Nulls
+    print("Is INF:") 
+    print(np.isinf(df).any()) # Checks for infinities
+    print("Is Zero:")
+    print((df.values == 0).any()) # Check for zeros 
+
+
 def find_consv_lib_vs_paid_sick_leave(
     df_states: pd.DataFrame
 ) -> None:

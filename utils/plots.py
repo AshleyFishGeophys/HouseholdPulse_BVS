@@ -625,3 +625,65 @@ def plot_importance(
     plt.xticks(range(len(importance)), x_labels, rotation=90)
     plt.show()
     
+    
+    
+def plot_ess(
+    summary_df: pd.DataFrame,
+    variables: list,
+    states: list
+) -> None:
+    """Plots Effective Sample Size (ESS) for bulk and tail of
+    specified variables across different covariate values.
+
+    Args:
+      summary_df (pd.DataFrame):
+          A DataFrame containing the summary statistics 
+          including ESS values for different variables and 
+          covariates (states or variables).
+
+      variables (list):
+          A list of variable names to plot the ESS for.
+
+      states (list):
+          A list of state names (if plotting ESS by state).
+
+    Returns:
+        None:
+            This function creates plots and does not return any value.
+
+    Typical Usage Example: 
+        This allows you to visually assess the convergence of the
+        MCMC sampler for each variable and state, helping you identify
+        potential issues with model fit or sampling efficiency.      
+
+        plot_ess(summary_df, inference_variables, inference_states)
+    """
+
+
+    for i, var_name in enumerate(['beta', 'beta_raw', 'ind', 'mu']):
+        pattern = f'{var_name}\[(\d+)\]'
+
+        filtered_df = summary_df[summary_df.index.str.match(pattern)]
+
+        fig, ax = plt.subplots(figsize=(20, 5), nrows=2, ncols=1, sharex=True)
+        fig.suptitle(f"ESS bulk and tail: {var_name}")
+
+        if var_name in ['beta', 'beta_raw', 'ind']:
+            ax[0].plot(variables, filtered_df['ess_bulk'])
+            ax[0].set_title("ess bulk")
+            ax[1].plot(variables, filtered_df['ess_tail'])
+            ax[0].set_title("ess tail")
+            # plt.xlim(0, len(filtered_df['ess_bulk']))
+
+            plt.xticks(rotation=90)
+            plt.show()
+
+        else: 
+            ax[0].plot(states, filtered_df['ess_bulk'])
+            ax[0].set_title("ess bulk")
+            ax[1].plot(states, filtered_df['ess_tail'])
+            ax[0].set_title("ess tail")
+            # plt.xlim(0, len(filtered_df['ess_bulk']))
+
+            plt.xticks(rotation=45)
+            plt.show() 
