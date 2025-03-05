@@ -4,6 +4,7 @@ import scipy.cluster.hierarchy as shc
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import pandas as pd
+import numpy as np
 import seaborn as sns  
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
@@ -415,6 +416,80 @@ def plot_p_values_false_discovery_corrected(
     plt.show()
 
 
+# def plots_null_hypothesis(
+#     df_vars: pd.DataFrame,
+#     target: pd.Series
+# ) -> None:
+#     """ Generates plots to visually assess the relationship between
+#     numeric variables and a target variable, including regression plots,
+#     histograms, and Q-Q plots.
+
+#     This function scales numeric variables, imputes missing values,
+#     and then creates visualizations for each variable to help assess the
+#     null hypothesis (typically that there is no relationship between the
+#     variable and the target).
+
+#     Args:
+#         df_vars (pd.DataFrame):
+#             Pandas DataFrame containing the independent variables.  Only numeric
+#             columns will be used.
+#         target (pd.Series):
+#             Pandas Series or array-like containing the target variable.
+
+#     Returns:
+#         None (displays the plots).  Prints an error message if no numeric columns
+#         are found in `df_vars`.
+#     """
+#     # Select numeric columns
+#     numeric_vars = df_vars.select_dtypes(include='number')
+#     if numeric_vars.empty: # Check if there are any numeric columns
+#         print("Error: No numeric columns found in the DataFrame.")
+#         return
+
+#     # Convert numeric variables to a NumPy array for scaling and imputation
+#     X = numeric_vars.values
+#     target_array = np.array(target) # Target to numpy array.
+
+#     # Scale data (z-score scaling)
+#     X_scaled = X.copy()
+#     scaler = StandardScaler() # Create a StandardScaler object
+#     X_scaled = scaler.fit_transform(X) # Scale the numeric variables
+
+#     # Impute missing values, if any
+#     imputer = SimpleImputer(strategy='mean') # Create a SimpleImputer object
+#     X_imputed = imputer.fit_transform(X_scaled) # Impute missing values using the mean
+
+#     for i, var_name in enumerate(numeric_vars.columns):  # Iterate through columns
+#         variable_data = X_imputed[:, i]  # Get the data for the current variable
+
+#         # --- Visualizations ---
+#         # 1. Scatter Plot & Regression Line
+#         plt.figure(figsize=(10, 6))
+#         sns.regplot(x=variable_data, y=target_array, scatter_kws={'alpha': 0.5}, line_kws={'color': 'red'})
+#         plt.xlabel(var_name, fontsize=12)
+#         plt.ylabel("Target Variable", fontsize=12)
+#         plt.title(f"Scatter Plot & Regression Line of {var_name} vs. Target", fontsize=14)
+#         plt.grid(True)
+#         plt.tight_layout()
+#         plt.show()
+
+#         # 2. Histogram for Normality Check
+#         plt.figure(figsize=(8, 5))
+#         sns.histplot(variable_data, kde=True)
+#         plt.xlabel(var_name, fontsize=12)
+#         plt.title(f"Histogram of {var_name}", fontsize=14)
+#         plt.grid(True)
+#         plt.tight_layout()
+#         plt.show()
+
+#         # 3. Q-Q Plot for Normality Check
+#         plt.figure(figsize=(8, 5))
+#         sm.qqplot(variable_data, stats_qq.norm, line='s')
+#         plt.title(f"Q-Q Plot of {var_name}", fontsize=14)
+#         plt.grid(True)
+#         plt.tight_layout()
+#         plt.show()
+
 def plots_null_hypothesis(
     df_vars: pd.DataFrame,
     target: pd.Series
@@ -445,7 +520,7 @@ def plots_null_hypothesis(
         print("Error: No numeric columns found in the DataFrame.")
         return
 
-    # Convert numeric variables to a NumPy array for scaling and imputation
+#     # Convert numeric variables to a NumPy array for scaling and imputation
     X = numeric_vars.values
     target_array = np.array(target) # Target to numpy array.
 
@@ -458,23 +533,26 @@ def plots_null_hypothesis(
     imputer = SimpleImputer(strategy='mean') # Create a SimpleImputer object
     X_imputed = imputer.fit_transform(X_scaled) # Impute missing values using the mean
 
+
+
     for i, var_name in enumerate(numeric_vars.columns):  # Iterate through columns
-        variable_data = X_imputed[:, i]  # Get the data for the current variable
+        # variable_data = X_imputed[:, i]  # Get the data for the current variable
+        variable_data = X[:, i]  # Get the data for the current variable
 
         # --- Visualizations ---
         # 1. Scatter Plot & Regression Line
         plt.figure(figsize=(10, 6))
-        sns.regplot(x=variable_data, y=target_array, scatter_kws={'alpha': 0.5}, line_kws={'color': 'red'})
+        sns.regplot(x=X[:, i], y=target_array, scatter_kws={'alpha': 0.5}, line_kws={'color': 'red'})
         plt.xlabel(var_name, fontsize=12)
-        plt.ylabel("Target Variable", fontsize=12)
-        plt.title(f"Scatter Plot & Regression Line of {var_name} vs. Target", fontsize=14)
+        plt.ylabel("Long COVID Rates", fontsize=12)
+        plt.title(f"Scatter Plot & Regression Line of {var_name} vs. Long COVID Rates", fontsize=14)
         plt.grid(True)
         plt.tight_layout()
         plt.show()
 
         # 2. Histogram for Normality Check
         plt.figure(figsize=(8, 5))
-        sns.histplot(variable_data, kde=True)
+        sns.histplot(X[:, i], kde=True)
         plt.xlabel(var_name, fontsize=12)
         plt.title(f"Histogram of {var_name}", fontsize=14)
         plt.grid(True)
@@ -483,13 +561,11 @@ def plots_null_hypothesis(
 
         # 3. Q-Q Plot for Normality Check
         plt.figure(figsize=(8, 5))
-        sm.qqplot(variable_data, stats_qq.norm, line='s')
+        sm.qqplot(X_imputed[:, i], stats_qq.norm, line='s')
         plt.title(f"Q-Q Plot of {var_name}", fontsize=14)
         plt.grid(True)
         plt.tight_layout()
         plt.show()
-
-
 
 def clean_feature_name(name: str) -> str:
     """Cleans a feature name.

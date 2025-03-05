@@ -689,3 +689,26 @@ def save_cleaned_results(df: pd.DataFrame, save_path: str) -> None:
     """
     
     df.to_csv(save_path, index=True) 
+    
+    
+def read_results(path: str) -> pd.DataFrame:
+    """Save a Pandas DataFrame to a CSV file.
+
+    Args:
+        path (str):
+            The path to the CSV file to be read.
+
+    Returns:
+        df (pd.DataFrame):
+            The Pandas DataFrame containing the inference data.
+        
+    Typical Usage Example: 
+        Read in csv of BVS inference results and return a df. 
+        
+        path = "C:\path\to\data\BVS_summary_df.csv"
+        sample_stats_df = read_results(path)        
+    """    
+    
+    data = pd.read_csv(path, index_col=0)
+    
+    return data
